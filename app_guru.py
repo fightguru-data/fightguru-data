@@ -21,7 +21,7 @@ st.markdown("""
 <style>
     .stDownloadButton button { background-color: #e63946 !important; color: white !important; font-weight: bold !important; width: 100%; border-radius: 8px !important; }
     .stDataFrame { background: #111; border-radius: 10px; }
-    .sidebar .sidebar-content { background-image: linear-gradient(#2e7bcf,#2e7bcf); color: white; }
+    [data-testid="stSidebar"] { background-color: #0e1117; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,7 +65,7 @@ def get_readable_cat(code):
     return (p + " " + w + "кг").strip() if p else c
 
 @st.cache_data(ttl=3600)
-def load_data_v51():
+def load_data_v53():
     if not os.path.exists(DATABASE_FILE): return None
     try:
         df = pd.read_csv(DATABASE_FILE, low_memory=False)
@@ -76,11 +76,21 @@ def load_data_v51():
         df['blue_full_name'] = df['blue_first_name'].fillna('') + " " + df['blue_last_name'].fillna('')
         df['date_start'] = pd.to_datetime(df['date_start'], errors='coerce')
         df['Human_Category'] = df['category_code'].apply(get_readable_cat)
+        
+        # Интеллектуальный поиск колонки даты рождения
+        dob_cols = [c for c in df.columns if any(x in c for x in ['birth', 'birthday', 'рождения'])]
+        if dob_cols:
+            df['athlete_dob'] = df[dob_cols[0]].fillna('Н/Д')
+        else:
+            df['athlete_dob'] = 'Н/Д'
+
+        df['red_score'] = pd.to_numeric(df['red_score'], errors='coerce').fillna(0).astype(int)
+        df['blue_score'] = pd.to_numeric(df['blue_score'], errors='coerce').fillna(0).astype(int)
         return df
     except:
         return None
 
-df = load_data_v51()
+df = load_data_v53()
 
 # --- ЛОГИКА ТЕЛЕГРАМ-БОТА ---
 def start_bot():
@@ -88,7 +98,7 @@ def start_bot():
 
     @bot.message_handler(commands=['start'])
     def send_welcome(m):
-        bot.reply_to(m, "FIGHTGURU DATA CENTER\nВведите фамилию атлета латиницей (например: Osipenko):")
+        bot.reply_to(m, "FIGHTGURU DATA CENTER\nВведите фамилию атлета латиницей:")
 
     @bot.message_handler(func=lambda m: True)
     def search_athlete(m):
@@ -98,7 +108,6 @@ def start_bot():
             return
 
         try:
-            # Прямое чтение файла
             data = pd.read_csv(DATABASE_FILE, low_memory=False)
             data.columns = [c.strip().lower() for c in data.columns]
             
@@ -113,11 +122,17 @@ def start_bot():
             results['date_start'] = pd.to_datetime(results['date_start'], errors='coerce')
             results = results.sort_values('date_start', ascending=False).head(10)
             
-            msg = "👤 ДОСЬЕ: " + name_query.upper() + "\n" + "="*20 + "\n"
+            # Ищем дату рождения в сырых данных для бота
+            dob_col = next((c for c in results.columns if any(x in c for x in ['birth', 'birthday', 'рождения'])), None)
+            dob_val = str(results.iloc[0][dob_col]) if dob_col else "Не указана"
+
+            msg = "👤 ДОСЬЕ: " + name_query.upper() + "\n"
+            msg += "📅 Д.Р.: " + dob_val + "\n"
+            msg += "="*20 + "\n"
+            
             for _, r in results.iterrows():
                 date_str = str(r['date_start'].year) if pd.notna(r['date_start']) else "????"
                 category = get_readable_cat(r['category_code'])
-                
                 win_id = str(r['winner_athlete_id']).split('.')[0] if pd.notna(r['winner_athlete_id']) else ""
                 red_id = str(r['red_id']).split('.')[0]
                 
@@ -130,16 +145,15 @@ def start_bot():
                 
                 msg += res_icon + " | " + date_str + " | " + category + "\n"
                 msg += red_side + " vs " + blue_side + "\n"
-                msg += "Счет: " + str(int(r['red_score'])) + ":" + str(int(r['blue_score'])) + "\n"
+                msg += "Счет: " + str(int(pd.to_numeric(r['red_score'], errors='coerce') or 0)) + ":" + str(int(pd.to_numeric(r['blue_score'], errors='coerce') or 0)) + "\n"
                 msg += "-"*15 + "\n"
             
             bot.send_message(m.chat.id, msg)
-        except Exception as e:
+        except:
             bot.send_message(m.chat.id, "Проблема с базой данных.")
 
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
 
-# Запуск бота один раз при старте сессии
 if "bot_thread_active" not in st.session_state:
     try:
         t = threading.Thread(target=start_bot, daemon=True)
@@ -148,8 +162,8 @@ if "bot_thread_active" not in st.session_state:
     except:
         pass
 
-# --- ГРАФИЧЕСКИЙ ИНТЕРФЕЙС ---
-st.title("FIGHTGURU DATA CENTER v51.0")
+# --- ИНТЕРФЕЙС ---
+st.title("FIGHTGURU DATA CENTER v53.0")
 
 if df is not None:
     nav_mode = st.sidebar.radio("Навигация", ["🏛️ Пантеон", "👤 Досье"])
@@ -165,7 +179,7 @@ if df is not None:
         fin_matches = f_data[f_data['round_code'].str.contains('FNL|FIN', case=False, na=False)].copy()
         
         if fin_matches.empty:
-            st.warning("В базе нет данных по финалам для этого турнира.")
+            st.warning("Нет данных по финалам.")
         else:
             def get_winner_info(row):
                 if str(row['winner_athlete_id']) == str(row['red_id']):
@@ -192,9 +206,13 @@ if df is not None:
             res_df = df[(df['red_full_name'].str.lower().str.contains(search_f)) | 
                         (df['blue_full_name'].str.lower().str.contains(search_f))]
             if not res_df.empty:
-                st.dataframe(res_df[['date_start', 'tournament_name', 'Human_Category', 'red_full_name', 'blue_full_name', 'score_total']].sort_values('date_start', ascending=False), use_container_width=True)
+                # Включаем колонку athlete_dob в отображение
+                display_cols = ['date_start', 'tournament_name', 'Human_Category', 'athlete_dob', 'red_full_name', 'blue_full_name', 'red_score', 'blue_score']
+                # Фильтруем список колонок на случай если что-то пошло не так
+                actual_cols = [c for c in display_cols if c in res_df.columns]
+                st.dataframe(res_df[actual_cols].sort_values('date_start', ascending=False), use_container_width=True)
             else:
-                st.info("Атлет не найден в базе данных.")
+                st.info("Атлет не найден.")
 
 st.sidebar.markdown("---")
 st.sidebar.write("FIGHTGURU | МИР САМБО")
