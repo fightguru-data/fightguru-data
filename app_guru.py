@@ -16,29 +16,32 @@ except:
 
 st.set_page_config(page_title="FIGHTGURU DATA CENTER", page_icon=logo_img, layout="wide")
 
-# --- СТИЛИЗАЦИЯ (PREMIUM GREY UI) ---
+# --- СТИЛИЗАЦИЯ (PREMIUM GREY UI v62.0) ---
 st.markdown("""
 <style>
     /* Глобальный фон */
     .stApp { background-color: #1e1f22; color: #eeeeee; }
     .main .block-container { padding: 1rem 0.5rem; }
 
-    /* Стилизация карточки */
+    /* Стилизация карточки-монолита */
     .match-box {
         background-color: #2b2d31;
         border-radius: 12px;
         padding: 18px;
         border: 1px solid #3f4147;
-        margin-bottom: 0px; /* Убираем нижний отступ, так как используем контейнер streamlit */
+        margin-bottom: 0px;
+        position: relative;
     }
     
     .win-border { border-left: 8px solid #28a745; }
     .loss-border { border-left: 8px solid #e63946; }
 
+    /* Шапка карточки: Дата и Раунд */
     .match-header {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 8px;
+        align-items: flex-start;
+        margin-bottom: 0px;
     }
     .date-txt { font-size: 11px; color: #888; font-weight: 700; }
     .round-label {
@@ -51,13 +54,29 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    .tourney-txt { font-size: 13px; font-weight: 800; color: #ffffff; text-transform: uppercase; line-height: 1.2; margin-bottom: 12px; }
-    .cat-txt { font-size: 11px; color: #e63946; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; }
+    /* Счёт под стадией */
+    .score-container {
+        text-align: right;
+        margin-top: 5px;
+        margin-bottom: 10px;
+    }
+    .score-txt { 
+        font-size: 44px; 
+        font-weight: 900; 
+        color: #fff; 
+        line-height: 1; 
+        letter-spacing: -2px; 
+    }
 
-    /* Оппонент и Счет */
-    .opp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    /* Текст турнира и категории */
+    .tourney-txt { font-size: 13px; font-weight: 800; color: #ffffff; text-transform: uppercase; line-height: 1.2; margin-top: -35px; margin-bottom: 5px; width: 70%; }
+    .cat-txt { font-size: 11px; color: #e63946; font-weight: 800; margin-bottom: 15px; text-transform: uppercase; }
+
+    /* Оппонент */
+    .opp-section { margin-top: 10px; }
+    .opp-flag-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
     .flag-txt { font-size: 20px; }
-    .score-txt { font-size: 42px; font-weight: 900; color: #fff; line-height: 1; letter-spacing: -1px; text-align: right; }
+    .country-code { font-size: 11px; font-weight: 800; color: #888; }
 
     /* Футер */
     .match-footer {
@@ -70,9 +89,9 @@ st.markdown("""
     }
     .time-txt { font-size: 12px; color: #00ff41; font-weight: 800; }
     .warn-txt { font-size: 11px; color: #ffcc00; font-weight: 700; }
-    .res-txt { font-size: 12px; font-weight: 900; }
+    .res-txt { font-size: 12px; font-weight: 900; text-transform: uppercase; }
 
-    /* Кнопка Streamlit внутри карточки */
+    /* Кнопка Streamlit (Оппонент) */
     div.stButton > button:first-child {
         background-color: #1e1f22;
         color: #ffffff !important;
@@ -86,7 +105,7 @@ st.markdown("""
     }
     div.stButton > button:hover { border-color: #e63946; background-color: #313339; }
 
-    /* Шапка досье */
+    /* Шапка профиля */
     .athlete-profile {
         background: #2b2d31;
         padding: 24px;
@@ -137,7 +156,7 @@ def get_readable_cat(code):
     return f"{p} {g} {w}КГ"
 
 @st.cache_data(ttl=300)
-def load_data_v61():
+def load_data_v62():
     if not os.path.exists(DATABASE_FILE): return None
     try:
         df = pd.read_csv(DATABASE_FILE, low_memory=False)
@@ -151,7 +170,7 @@ def load_data_v61():
         return df
     except: return None
 
-df = load_data_v61()
+df = load_data_v62()
 
 # --- БОТ ---
 if "bot_active" not in st.session_state:
@@ -168,7 +187,7 @@ if df is not None:
     nav = st.sidebar.radio("Навигация", ["👤 Досье", "🏛️ Пантеон"])
 
     if nav == "👤 Досье":
-        search_input = st.text_input("ПОИСК АТЛЕТА (Osipenko, Zinnatov...):", value=st.session_state.search_query)
+        search_input = st.text_input("ПОИСК АТЛЕТА:", value=st.session_state.search_query, placeholder="Osipenko, Zinnatov...")
         
         if search_input:
             search_low = search_input.lower().strip()
@@ -184,7 +203,6 @@ if df is not None:
                 for _, r in matches.iterrows():
                     if search_low in str(r['red_last_name']).lower():
                         final_name = r['red_full_name']
-                        # Пытаемся найти колонку рождения
                         dob_col = next((c for c in r.index if 'birth' in c and 'red' in c), None)
                         if dob_col and pd.notna(r[dob_col]): dob_list.append(str(r[dob_col]).strip())
                     elif search_low in str(r['blue_last_name']).lower():
@@ -208,12 +226,11 @@ if df is not None:
                     win_id = str(row['winner_athlete_id'])
                     is_win = (is_red and win_id == str(row['red_id'])) or (not is_red and win_id == str(row['blue_id']))
                     
-                    # Безопасное получение предупреждений (Robust Check)
-                    warn_cols_red = [c for c in row.index if 'warn' in c and 'red' in c]
-                    warn_cols_blue = [c for c in row.index if 'warn' in c and 'blue' in c]
-                    
-                    my_w = row[warn_cols_red[0]] if is_red and warn_cols_red else (row[warn_cols_blue[0]] if not is_red and warn_cols_blue else 0)
-                    op_w = row[warn_cols_blue[0]] if is_red and warn_cols_blue else (row[warn_cols_red[0]] if not is_red and warn_cols_red else 0)
+                    # Безопасное получение предупреждений
+                    w_c_red = [c for c in row.index if 'warn' in c and 'red' in c]
+                    w_c_blue = [c for c in row.index if 'warn' in c and 'blue' in c]
+                    my_w = row[w_c_red[0]] if is_red and w_c_red else (row[w_c_blue[0]] if not is_red and w_c_blue else 0)
+                    op_w = row[w_c_blue[0]] if is_red and w_c_blue else (row[w_c_red[0]] if not is_red and w_c_red else 0)
                     
                     opp_last = str(row['blue_last_name']) if is_red else str(row['red_last_name'])
                     opp_full = str(row['blue_full_name']) if is_red else str(row['red_full_name'])
@@ -231,37 +248,36 @@ if df is not None:
                             <span class="date-txt">{row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '??.??.????'}</span>
                             <span class="round-label">{round_label}</span>
                         </div>
+                        <div class="score-container">
+                            <div class="score-txt">{int(row.get('red_score', 0))}:{int(row.get('blue_score', 0))}</div>
+                        </div>
                         <div class="tourney-txt">{str(row['tournament_name'])}</div>
                         <div class="cat-txt">{get_readable_cat(row['category_code'])}</div>
                     """, unsafe_allow_html=True)
 
-                    # Оппонент и Счет через колонки Streamlit (внутри серой зоны)
-                    c1, c2 = st.columns([2.2, 1])
-                    with c1:
-                        st.markdown(f"""
-                        <div class="opp-row">
+                    # Секция оппонента
+                    st.markdown(f"""
+                    <div class="opp-section">
+                        <div class="opp-flag-row">
                             <span class="flag-txt">{get_flag(opp_country)}</span>
                             <span class="country-code">{opp_country}</span>
                         </div>
-                        """, unsafe_allow_html=True)
-                        if st.button(f"{opp_full.upper()}", key=f"btn_{row.name}"):
-                            st.session_state.search_query = opp_last
-                            st.rerun()
-                    with c2:
-                        st.markdown(f"""
-                        <div class="score-txt">{int(row.get('red_score', 0))}:{int(row.get('blue_score', 0))}</div>
-                        """, unsafe_allow_html=True)
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button(f"{opp_full.upper()}", key=f"btn_{row.name}"):
+                        st.session_state.search_query = opp_last
+                        st.rerun()
 
-                    # Конец блока (Футер)
+                    # Футер
                     st.markdown(f"""
                         <div class="match-footer">
                             <div class="time-txt">⏱ {match_t}</div>
-                            <div class="warn-txt">⚠️ ПРЕД: {int(my_w)} / {int(op_w)}</div>
+                            <div class="warn-txt">W: {int(my_w)} / {int(op_w)}</div>
                             <div class="res-txt" style="color: {'#28a745' if is_win else '#e63946'};">{res_tag}</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-                    st.write("") # Разделитель между карточками
+                    st.write("") 
             else:
                 st.info("Атлет не найден.")
 
