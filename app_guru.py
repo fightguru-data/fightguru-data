@@ -19,90 +19,81 @@ st.set_page_config(page_title="FIGHTGURU DATA CENTER", page_icon=logo_img, layou
 # --- СТИЛИЗАЦИЯ (PREMIUM GREY UI) ---
 st.markdown("""
 <style>
-    /* Глобальный фон - Премиальный серый */
+    /* Глобальный фон */
     .stApp { background-color: #1e1f22; color: #eeeeee; }
     .main .block-container { padding: 1rem 0.5rem; }
 
-    /* Контейнер карточки (Монолит) */
+    /* Стилизация карточки */
     .match-box {
         background-color: #2b2d31;
         border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 20px;
+        padding: 18px;
         border: 1px solid #3f4147;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        margin-bottom: 0px; /* Убираем нижний отступ, так как используем контейнер streamlit */
     }
     
-    .win-border { border-left: 6px solid #28a745; }
-    .loss-border { border-left: 6px solid #e63946; }
+    .win-border { border-left: 8px solid #28a745; }
+    .loss-border { border-left: 8px solid #e63946; }
 
-    /* Заголовок карточки */
     .match-header {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #3f4147;
-        padding-bottom: 8px;
+        margin-bottom: 8px;
     }
-    .date-txt { font-size: 11px; color: #888; font-weight: 600; }
+    .date-txt { font-size: 11px; color: #888; font-weight: 700; }
     .round-label {
         background: #e63946;
         color: #fff;
-        padding: 1px 8px;
+        padding: 2px 8px;
         border-radius: 4px;
         font-size: 10px;
         font-weight: 900;
         text-transform: uppercase;
     }
 
-    /* Название турнира */
-    .tourney-txt { font-size: 12px; font-weight: 800; color: #fff; text-transform: uppercase; line-height: 1.2; margin-bottom: 12px; }
+    .tourney-txt { font-size: 13px; font-weight: 800; color: #ffffff; text-transform: uppercase; line-height: 1.2; margin-bottom: 12px; }
+    .cat-txt { font-size: 11px; color: #e63946; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; }
 
-    /* Счёт и предупреждения */
-    .score-container { text-align: right; line-height: 1; }
-    .score-txt { font-size: 38px; font-weight: 900; color: #fff; letter-spacing: -1px; }
-    .warn-txt { font-size: 10px; color: #e63946; font-weight: 800; margin-top: -5px; }
+    /* Оппонент и Счет */
+    .opp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .flag-txt { font-size: 20px; }
+    .score-txt { font-size: 42px; font-weight: 900; color: #fff; line-height: 1; letter-spacing: -1px; text-align: right; }
 
-    /* Оппонент (Кнопка Streamlit будет вставлена между блоками) */
-    .opp-flag-box { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-    .flag-txt { font-size: 18px; }
-    .country-code { font-size: 11px; font-weight: 800; color: #888; }
-
-    /* Футер карточки */
-    .card-footer {
+    /* Футер */
+    .match-footer {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-top: 10px;
-        padding-top: 8px;
+        margin-top: 15px;
+        padding-top: 10px;
         border-top: 1px solid #3f4147;
     }
-    .cat-txt { font-size: 10px; color: #e63946; font-weight: 800; text-transform: uppercase; }
-    .time-txt { font-size: 11px; color: #00ff41; font-weight: 800; }
-    .res-txt { font-size: 11px; font-weight: 900; text-transform: uppercase; }
+    .time-txt { font-size: 12px; color: #00ff41; font-weight: 800; }
+    .warn-txt { font-size: 11px; color: #ffcc00; font-weight: 700; }
+    .res-txt { font-size: 12px; font-weight: 900; }
 
-    /* Кнопки оппонентов */
+    /* Кнопка Streamlit внутри карточки */
     div.stButton > button:first-child {
         background-color: #1e1f22;
         color: #ffffff !important;
         border: 1px solid #4f5157;
         font-weight: 700;
-        font-size: 14px;
+        font-size: 16px;
         width: 100%;
         text-align: left;
-        border-radius: 6px;
-        padding: 5px 10px;
+        border-radius: 8px;
+        padding: 8px 12px;
     }
-    div.stButton > button:hover { border-color: #e63946; color: #e63946 !important; }
+    div.stButton > button:hover { border-color: #e63946; background-color: #313339; }
 
     /* Шапка досье */
     .athlete-profile {
         background: #2b2d31;
-        padding: 20px;
+        padding: 24px;
         border-radius: 12px;
         text-align: center;
         border: 1px solid #3f4147;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -121,6 +112,7 @@ FLAG_EMOJIS = {
     "ESP": "🇪🇸", "GER": "🇩🇪", "ISR": "🇮🇱", "GRE": "🇬🇷", "NED": "🇳🇱", "MAR": "🇲🇦", "CMR": "🇨🇲",
     "LAT": "🇱🇻", "LTU": "🇱🇹", "EST": "🇪🇪", "LVA": "🇱🇻", "TUR": "🇹🇷"
 }
+COUNTRY_NAMES_RU = {"RUS": "РОССИЯ", "BLR": "БЕЛАРУСЬ", "KAZ": "КАЗАХСТАН", "UZB": "УЗБЕКИСТАН", "KGZ": "КЫРГЫЗСТАН"}
 
 # --- ФУНКЦИИ ---
 def format_time(val):
@@ -145,7 +137,7 @@ def get_readable_cat(code):
     return f"{p} {g} {w}КГ"
 
 @st.cache_data(ttl=300)
-def load_data_v60():
+def load_data_v61():
     if not os.path.exists(DATABASE_FILE): return None
     try:
         df = pd.read_csv(DATABASE_FILE, low_memory=False)
@@ -159,7 +151,7 @@ def load_data_v60():
         return df
     except: return None
 
-df = load_data_v60()
+df = load_data_v61()
 
 # --- БОТ ---
 if "bot_active" not in st.session_state:
@@ -186,23 +178,26 @@ if df is not None:
             if not matches.empty:
                 matches = matches.sort_values(['date_start', 'round_rank'], ascending=[False, False])
                 
-                # Поиск Д.Р.
+                # Поиск Д.Р. и ФИО
                 dob_list = []
                 final_name = ""
                 for _, r in matches.iterrows():
                     if search_low in str(r['red_last_name']).lower():
                         final_name = r['red_full_name']
-                        if pd.notna(r['red_birth_date']): dob_list.append(str(r['red_birth_date']).strip())
+                        # Пытаемся найти колонку рождения
+                        dob_col = next((c for c in r.index if 'birth' in c and 'red' in c), None)
+                        if dob_col and pd.notna(r[dob_col]): dob_list.append(str(r[dob_col]).strip())
                     elif search_low in str(r['blue_last_name']).lower():
                         final_name = r['blue_full_name']
-                        if pd.notna(r['blue_birth_date']): dob_list.append(str(r['blue_birth_date']).strip())
+                        dob_col = next((c for c in r.index if 'birth' in c and 'blue' in c), None)
+                        if dob_col and pd.notna(r[dob_col]): dob_list.append(str(r[dob_col]).strip())
+                
                 athlete_dob = max(set(dob_list), key=dob_list.count) if dob_list else "Н/Д"
                 
-                # ШАПКА ПРОФИЛЯ
                 st.markdown(f"""
                 <div class="athlete-profile">
-                    <h2 style="margin:0; color:#e63946; font-size:24px;">{final_name.upper()}</h2>
-                    <p style="margin:8px 0 0 0; color:#aaa; font-size:13px; font-weight:700;">
+                    <h2 style="margin:0; color:#e63946; font-size:26px; font-weight:900;">{final_name.upper()}</h2>
+                    <p style="margin:10px 0 0 0; color:#888; font-size:14px; font-weight:700;">
                         📅 ДАТА РОЖДЕНИЯ: <span style="color:#fff;">{athlete_dob}</span>
                     </p>
                 </div>
@@ -213,14 +208,16 @@ if df is not None:
                     win_id = str(row['winner_athlete_id'])
                     is_win = (is_red and win_id == str(row['red_id'])) or (not is_red and win_id == str(row['blue_id']))
                     
-                    # Данные оппонента
+                    # Безопасное получение предупреждений (Robust Check)
+                    warn_cols_red = [c for c in row.index if 'warn' in c and 'red' in c]
+                    warn_cols_blue = [c for c in row.index if 'warn' in c and 'blue' in c]
+                    
+                    my_w = row[warn_cols_red[0]] if is_red and warn_cols_red else (row[warn_cols_blue[0]] if not is_red and warn_cols_blue else 0)
+                    op_w = row[warn_cols_blue[0]] if is_red and warn_cols_blue else (row[warn_cols_red[0]] if not is_red and warn_cols_red else 0)
+                    
                     opp_last = str(row['blue_last_name']) if is_red else str(row['red_last_name'])
                     opp_full = str(row['blue_full_name']) if is_red else str(row['red_full_name'])
                     opp_country = row['blue_nationality_code'] if is_red else row['red_nationality_code']
-                    
-                    # Предупреждения (Warnings)
-                    my_warn = row['red_warnings'] if is_red else row['blue_warnings']
-                    opp_warn = row['blue_warnings'] if is_red else row['red_warnings']
                     
                     round_label = ROUND_MAP.get(str(row['round_code']).upper(), (0, str(row['round_code'])))[1]
                     card_cls = "win-border" if is_win else "loss-border"
@@ -235,13 +232,14 @@ if df is not None:
                             <span class="round-label">{round_label}</span>
                         </div>
                         <div class="tourney-txt">{str(row['tournament_name'])}</div>
+                        <div class="cat-txt">{get_readable_cat(row['category_code'])}</div>
                     """, unsafe_allow_html=True)
 
-                    # Контент (Оппонент и Счет)
-                    c1, c2 = st.columns([2.5, 1])
+                    # Оппонент и Счет через колонки Streamlit (внутри серой зоны)
+                    c1, c2 = st.columns([2.2, 1])
                     with c1:
                         st.markdown(f"""
-                        <div class="opp-flag-box">
+                        <div class="opp-row">
                             <span class="flag-txt">{get_flag(opp_country)}</span>
                             <span class="country-code">{opp_country}</span>
                         </div>
@@ -251,23 +249,19 @@ if df is not None:
                             st.rerun()
                     with c2:
                         st.markdown(f"""
-                        <div class="score-container">
-                            <div class="score-txt">{int(row['red_score'])}:{int(row['blue_score'])}</div>
-                            <div class="warn-txt">W: {int(my_warn or 0)} vs {int(opp_warn or 0)}</div>
-                        </div>
+                        <div class="score-txt">{int(row.get('red_score', 0))}:{int(row.get('blue_score', 0))}</div>
                         """, unsafe_allow_html=True)
 
-                    # Футер блока
+                    # Конец блока (Футер)
                     st.markdown(f"""
-                        <div class="card-footer">
-                            <div class="cat-txt">{get_readable_cat(row['category_code'])}</div>
-                            <div>
-                                <span class="time-txt">⏱ {match_t}</span>
-                                <span class="res-txt" style="color: {'#28a745' if is_win else '#e63946'}; margin-left:12px;">{res_tag}</span>
-                            </div>
+                        <div class="match-footer">
+                            <div class="time-txt">⏱ {match_t}</div>
+                            <div class="warn-txt">⚠️ ПРЕД: {int(my_w)} / {int(op_w)}</div>
+                            <div class="res-txt" style="color: {'#28a745' if is_win else '#e63946'};">{res_tag}</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+                    st.write("") # Разделитель между карточками
             else:
                 st.info("Атлет не найден.")
 
