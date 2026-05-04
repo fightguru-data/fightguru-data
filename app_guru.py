@@ -16,96 +16,85 @@ except:
 
 st.set_page_config(page_title="FIGHTGURU DATA CENTER", page_icon=logo_img, layout="wide")
 
-# --- СТИЛИЗАЦИЯ (DARK PREMIUM UI) ---
+# --- СТИЛИЗАЦИЯ (ELITE SPORTS UI) ---
 st.markdown("""
 <style>
-    /* Глобальный фон приложения */
-    .stApp {
-        background-color: #0e1117;
-        color: #ffffff;
-    }
-    
-    .main .block-container { padding-left: 0.7rem; padding-right: 0.7rem; padding-top: 1rem; }
+    .stApp { background-color: #000000; color: #ffffff; }
+    .main .block-container { padding: 1rem 0.5rem; }
 
-    /* Стилизация кнопок оппонентов */
+    /* Кнопка оппонента - Компактный стиль */
     div.stButton > button:first-child {
-        background-color: #1c1f26;
+        background-color: #1a1a1a;
         color: #ffffff !important;
-        border: 1px solid #3d4450;
+        border: 1px solid #333;
         font-weight: 700;
-        font-size: 15px;
-        text-align: center;
+        font-size: 14px;
+        text-align: left;
+        padding: 8px 12px;
+        border-radius: 6px;
         width: 100%;
-        border-radius: 8px;
-        padding: 10px;
-        transition: 0.3s;
+        margin-top: -5px;
     }
-    div.stButton > button:hover {
-        border-color: #e63946;
-        background-color: #e63946;
-        color: #ffffff !important;
-    }
+    div.stButton > button:hover { border-color: #e63946; background-color: #e63946; }
 
-    /* Карточка поединка */
+    /* Карточка поединка - Оптимизированная плотность */
     .match-card {
-        background: #000000;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 15px;
-        border-left: 10px solid #444;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        background: #111111;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border-left: 6px solid #444;
+        position: relative;
     }
     .win-card { border-left-color: #28a745 !important; }
     .loss-card { border-left-color: #e63946 !important; }
     
-    .match-header {
-        font-size: 12px;
-        color: #666;
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-    .match-tournament { font-weight: 900; color: #ffffff; font-size: 15px; line-height: 1.3; margin-bottom: 12px; }
+    .match-date { font-size: 11px; color: #666; font-weight: 700; margin-bottom: 4px; }
+    .match-tournament { font-weight: 800; color: #ffffff; font-size: 13px; margin-bottom: 4px; line-height: 1.2; padding-right: 70px; }
+    .match-cat { font-size: 11px; color: #e63946; font-weight: 800; text-transform: uppercase; margin-bottom: 12px; }
     
     .round-badge {
+        position: absolute;
+        top: 16px;
+        right: 16px;
         background: #e63946;
         color: #fff;
         padding: 2px 8px;
         border-radius: 4px;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 900;
+        text-transform: uppercase;
     }
 
-    .match-score { 
-        font-size: 38px; 
-        font-weight: 900; 
-        color: #ffffff; 
-        text-align: right; 
-        line-height: 1;
-        text-shadow: 0 0 10px rgba(255,255,255,0.2);
+    /* Блок счета */
+    .score-container {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 10px;
+        text-align: center;
+        min-width: 80px;
     }
-    
+    .score-val { font-size: 28px; font-weight: 900; color: #ffffff; line-height: 1; }
+    .score-label { font-size: 9px; color: #555; text-transform: uppercase; margin-top: 4px; }
+
     .match-footer { 
-        font-size: 13px; 
-        color: #888; 
-        margin-top: 15px; 
+        margin-top: 12px; 
         display: flex; 
         justify-content: space-between; 
         border-top: 1px solid #222; 
-        padding-top: 10px;
+        padding-top: 8px;
+        align-items: center;
     }
-    .time-val { color: #00ff41; font-weight: 900; font-size: 15px; }
-    .match-cat { font-size: 12px; color: #e63946; margin-bottom: 8px; font-weight: 800; text-transform: uppercase; }
-    
-    /* Досье шапка */
+    .time-val { color: #00ff41; font-weight: 800; font-size: 12px; }
+    .status-val { font-weight: 900; font-size: 11px; text-transform: uppercase; }
+
+    /* Шапка досье */
     .athlete-header {
-        background: linear-gradient(90deg, #1c1f26 0%, #0e1117 100%);
+        background: #111111;
         padding: 20px;
         border-radius: 12px;
+        border-bottom: 4px solid #e63946;
         margin-bottom: 20px;
-        border: 1px solid #333;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -113,20 +102,18 @@ st.markdown("""
 # --- КОНСТАНТЫ ---
 DATABASE_FILE = "AllTournament.csv"
 ROUND_MAP = {
-    'FIN': (7, 'ФИНАЛ'), 'FNL': (7, 'ФИНАЛ'), 'SFL': (6, '1/2 ФИНАЛА'), 
-    'QFL': (5, '1/4 ФИНАЛА'), 'R16': (4, '1/8 ФИНАЛА'), 'R32': (3, '1/16 ФИНАЛА'),
-    'R64': (2, '1/32 ФИНАЛА'), 'R128': (1, '1/64 ФИНАЛА')
+    'FIN': (7, 'ФИНАЛ'), 'FNL': (7, 'ФИНАЛ'), 'SFL': (6, '1/2'), 
+    'QFL': (5, '1/4'), 'R16': (4, '1/8'), 'R32': (3, '1/16')
 }
 FLAG_EMOJIS = {
     "RUS": "🇷🇺", "BLR": "🇧🇾", "KAZ": "🇰🇿", "UZB": "🇺🇿", "KGZ": "🇰🇬", "MGL": "🇲🇳", "GEO": "🇬🇪", 
     "ARM": "🇦🇲", "AZE": "🇦🇿", "TJK": "🇹🇯", "TKM": "🇹🇲", "AIN": "🏳️", "FRA": "🇫🇷", "SRB": "🇷🇸", 
     "USA": "🇺🇸", "UKR": "🇺🇦", "BUL": "🇧🇬", "CRO": "🇭🇷", "MKD": "🇲🇰", "ROU": "🇷🇴", "ITA": "🇮🇹",
-    "ESP": "🇪🇸", "GER": "🇩🇪", "ISR": "🇮🇱", "GRE": "🇬🇷", "NED": "🇳🇱", "MAR": "🇲🇦", "CMR": "🇨🇲",
-    "LAT": "🇱🇻", "LTU": "🇱🇹", "EST": "🇪🇪", "LVA": "🇱🇻", "TUR": "🇹🇷"
+    "LAT": "🇱🇻", "LTU": "🇱🇹", "EST": "🇪🇪", "TUR": "🇹🇷"
 }
 COUNTRY_NAMES_RU = {"RUS": "РОССИЯ", "BLR": "БЕЛАРУСЬ", "KAZ": "КАЗАХСТАН", "UZB": "УЗБЕКИСТАН", "KGZ": "КЫРГЫЗСТАН", "AIN": "НЕЙТР. АТЛЕТ"}
 
-# --- ФУНКЦИИ ---
+# --- УТИЛИТЫ ---
 def format_time(val):
     try:
         s = str(val).strip()
@@ -140,17 +127,8 @@ def format_time(val):
 def get_flag(c): return FLAG_EMOJIS.get(str(c).upper().strip(), "🌍")
 def get_full_country(c): return COUNTRY_NAMES_RU.get(str(c).upper().strip(), str(c))
 
-def get_readable_cat(code):
-    c = str(code).upper().strip()
-    p = "Спорт" if "SAM" in c else "Боевое" if "CSM" in c else ""
-    g = "М" if "SAMM" in c or "CSMM" in c else "Ж" if "SAMW" in c or "CSMW" in c else ""
-    w = ""
-    if "ADT" in c:
-        parts = c.split("ADT"); w = (parts[1][:-1] + "+") if parts[1].endswith('O') else parts[1] if len(parts)>1 else ""
-    return f"{p} {g} {w}кг".strip()
-
 @st.cache_data(ttl=300)
-def load_data_v58():
+def load_data_v59():
     if not os.path.exists(DATABASE_FILE): return None
     try:
         df = pd.read_csv(DATABASE_FILE, low_memory=False)
@@ -164,7 +142,7 @@ def load_data_v58():
         return df
     except: return None
 
-df = load_data_v58()
+df = load_data_v59()
 
 # --- БОТ ---
 if "bot_active" not in st.session_state:
@@ -172,17 +150,16 @@ if "bot_active" not in st.session_state:
     threading.Thread(target=lambda: bot.infinity_polling(timeout=20), daemon=True).start()
     st.session_state.bot_active = True
 
-# --- ПОИСК ---
 if 'search_query' not in st.session_state:
     st.session_state.search_query = ""
 
-st.title("FIGHTGURU DATA CENTER")
-
+# --- ИНТЕРФЕЙС ---
 if df is not None:
+    # Сайдбар
     nav = st.sidebar.radio("Навигация", ["👤 Досье", "🏛️ Пантеон"])
 
     if nav == "👤 Досье":
-        search_input = st.text_input("Поиск (Osipenko, Zinnatov...):", value=st.session_state.search_query)
+        search_input = st.text_input("Поиск атлета (Osipenko, Zinnatov...):", value=st.session_state.search_query)
         
         if search_input:
             search_low = search_input.lower().strip()
@@ -192,30 +169,27 @@ if df is not None:
             if not matches.empty:
                 matches = matches.sort_values(['date_start', 'round_rank'], ascending=[False, False])
                 
-                # --- ЛОГИКА ОПРЕДЕЛЕНИЯ ДАННЫХ АТЛЕТА (ПЕРЕБОР ВСЕХ СТРОК) ---
+                # Поиск Д.Р. и имени
                 dob_list = []
                 final_name = ""
                 for _, r in matches.iterrows():
-                    # Если атлет в красном
                     if search_low in str(r['red_last_name']).lower():
                         final_name = r['red_full_name']
                         if pd.notna(r['red_birth_date']): dob_list.append(str(r['red_birth_date']).strip())
-                    # Если атлет в синем
                     elif search_low in str(r['blue_last_name']).lower():
                         final_name = r['blue_full_name']
                         if pd.notna(r['blue_birth_date']): dob_list.append(str(r['blue_birth_date']).strip())
-                
-                # Берем самую частую дату из списка найденных
                 athlete_dob = max(set(dob_list), key=dob_list.count) if dob_list else "Н/Д"
                 
-                # ШАПКА ДОСЬЕ
+                # ШАПКА
                 st.markdown(f"""
                 <div class="athlete-header">
-                    <h2 style="margin:0; color:#e63946;">{final_name.upper()}</h2>
-                    <p style="margin:5px 0 0 0; color:#888; font-weight:700;">📅 ДАТА РОЖДЕНИЯ: <span style="color:#fff;">{athlete_dob}</span></p>
+                    <h2 style="margin:0; color:#e63946; font-size: 22px;">{final_name.upper()}</h2>
+                    <p style="margin:5px 0 0 0; color:#888; font-size: 12px;">📅 ДАТА РОЖДЕНИЯ: <span style="color:#fff; font-weight:800;">{athlete_dob}</span></p>
                 </div>
                 """, unsafe_allow_html=True)
 
+                # КАРТОЧКИ
                 for _, row in matches.iterrows():
                     is_red = search_low in str(row['red_last_name']).lower()
                     win_id = str(row['winner_athlete_id'])
@@ -227,41 +201,42 @@ if df is not None:
                     
                     round_label = ROUND_MAP.get(str(row['round_code']).upper(), (0, str(row['round_code'])))[1]
                     card_style = "win-card" if is_win else "loss-card"
-                    res_tag = "ПОБЕДА" if is_win else "ПОРАЖЕНИЕ"
-                    match_t = format_time(row['fight_time'])
+                    status_txt = "ПОБЕДА" if is_win else "ПОРАЖЕНИЕ"
+                    status_clr = "#28a745" if is_win else "#e63946"
 
+                    # Рендерим HTML структуру карточки
                     st.markdown(f"""
                     <div class="match-card {card_style}">
-                        <div class="match-header">
-                            <span>{row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '????'}</span>
-                            <span class="round-badge">{round_label}</span>
-                        </div>
+                        <div class="match-date">{row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '????'}</div>
+                        <div class="round-badge">{round_label}</div>
                         <div class="match-tournament">{str(row['tournament_name']).upper()}</div>
-                        <div class="match-cat">{get_readable_cat(row['category_code'])}</div>
-                        <div style="color:#aaa; font-size:12px; margin-bottom:5px;">СОПЕРНИК:</div>
+                        <div class="match-cat">{row['category_code'].upper()}</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Интерактивная зона оппонента
-                    col_btn, col_score = st.columns([3, 1])
-                    with col_btn:
+                    # Интерактивный блок: Оппонент + Счет
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"<div style='font-size:11px; color:#555; margin-bottom:2px;'>ПРОТИВНИК:</div>", unsafe_allow_html=True)
                         st.write(f"{get_flag(opp_country)} {get_full_country(opp_country)}")
                         if st.button(f"{opp_full.upper()}", key=f"btn_{row.name}"):
                             st.session_state.search_query = opp_last
                             st.rerun()
-                            
-                    with col_score:
-                        st.markdown(f'<div class="match-score">{int(row["red_score"])}:{int(row["blue_score"])}</div>', unsafe_allow_html=True)
-                    
-                    st.markdown(f"""
-                        <div class="match-footer">
-                            <span>⏱ ВРЕМЯ БОЯ: <span class="time-val">{match_t}</span></span>
-                            <span style="color: {'#28a745' if is_win else '#e63946'}; font-weight: 900;">{res_tag}</span>
+                    with c2:
+                        st.markdown(f"""
+                        <div class="score-container">
+                            <div class="score-val">{int(row['red_score'])}:{int(row['blue_score'])}</div>
+                            <div class="score-label">СЧЕТ</div>
                         </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # Футер карточки
+                    st.markdown(f"""
+                    <div class="match-footer">
+                        <span>⏱ <span class="time-val">{format_time(row['fight_time'])}</span></span>
+                        <span class="status-val" style="color:{status_clr};">{status_txt}</span>
+                    </div>
                     """, unsafe_allow_html=True)
                     st.write("") 
             else:
                 st.info("Атлет не найден.")
-
-st.sidebar.markdown("---")
-st.sidebar.write("FIGHTGURU | МИР САМБО")
