@@ -16,98 +16,87 @@ except:
 
 st.set_page_config(page_title="FIGHTGURU DATA CENTER", page_icon=logo_img, layout="wide")
 
-# --- СТИЛИЗАЦИЯ (MOBILE OPTIMIZED CSS) ---
+# --- СТИЛИЗАЦИЯ (MOBILE OPTIMIZED) ---
 st.markdown("""
 <style>
-    .main .block-container { padding-left: 1rem; padding-right: 1rem; padding-top: 2rem; }
+    .main .block-container { padding-left: 0.5rem; padding-right: 0.5rem; padding-top: 1rem; }
     .match-card {
         background: #111111;
         border-radius: 12px;
         padding: 15px;
-        margin-bottom: 15px;
+        margin-bottom: 12px;
         border-left: 8px solid #444;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
     .win-card { border-left-color: #28a745 !important; }
     .loss-card { border-left-color: #e63946 !important; }
     .match-header {
         font-size: 11px;
         color: #888;
-        text-transform: uppercase;
-        margin-bottom: 8px;
         display: flex;
         justify-content: space-between;
-        font-weight: 700;
+        margin-bottom: 5px;
     }
-    .match-tournament { font-weight: 800; color: #fff; font-size: 13px; margin-bottom: 10px; line-height: 1.2; }
-    .match-main { display: flex; justify-content: space-between; align-items: center; }
-    .opponent-info { flex: 1; }
-    .opponent-name { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 2px; }
-    .opponent-country { font-size: 13px; color: #aaa; font-weight: 500; }
-    .match-score {
-        font-size: 24px;
-        font-weight: 900;
-        color: #e63946;
-        padding-left: 15px;
-        min-width: 65px;
-        text-align: right;
-    }
-    .match-stage {
-        display: inline-block;
-        background: #222;
+    .match-tournament { font-weight: 800; color: #fff; font-size: 13px; line-height: 1.2; margin-bottom: 8px; }
+    .round-badge {
+        background: #333;
         color: #e63946;
         padding: 2px 8px;
         border-radius: 4px;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 800;
-        margin-top: 8px;
         text-transform: uppercase;
     }
-    .dob-label { background: #e63946; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 12px; }
+    .match-main { display: flex; justify-content: space-between; align-items: center; }
+    .opponent-name { font-size: 16px; font-weight: 700; color: #fff; line-height: 1.1; }
+    .opponent-country { font-size: 12px; color: #aaa; margin-top: 2px; }
+    .match-score { font-size: 22px; font-weight: 900; color: #fff; text-align: right; min-width: 60px; }
+    .match-time { font-size: 11px; color: #555; margin-top: 5px; font-weight: 600; }
+    .match-cat { font-size: 11px; color: #e63946; margin-top: 3px; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- КОНСТАНТЫ ---
 DATABASE_FILE = "AllTournament.csv"
 
+# Словарь стадий (для сортировки и отображения)
+ROUND_MAP = {
+    'FIN': (7, 'ФИНАЛ'), 'FNL': (7, 'ФИНАЛ'),
+    'SFL': (6, '1/2 ФИНАЛА'), 'QFL': (5, '1/4 ФИНАЛА'),
+    'R16': (4, '1/8 ФИНАЛА'), 'R32': (3, '1/16 ФИНАЛА'),
+    'R64': (2, '1/32 ФИНАЛА'), 'R128': (1, '1/64 ФИНАЛА')
+}
+
+# Расширенный словарь флагов
 FLAG_EMOJIS = {
     "RUS": "🇷🇺", "BLR": "🇧🇾", "KAZ": "🇰🇿", "UZB": "🇺🇿", "KGZ": "🇰🇬", "MGL": "🇲🇳", "GEO": "🇬🇪", 
     "ARM": "🇦🇲", "AZE": "🇦🇿", "TJK": "🇹🇯", "TKM": "🇹🇲", "AIN": "🏳️", "FRA": "🇫🇷", "SRB": "🇷🇸", 
-    "USA": "🇺🇸", "UKR": "🇺🇦", "MKD": "🇲🇰", "CRO": "🇭🇷", "BUL": "🇧🇬", "ROU": "🇷🇴", "GRE": "🇬🇷",
-    "ITA": "🇮🇹", "ESP": "🇪🇸", "GER": "🇩🇪", "ISR": "🇮🇱", "MAR": "🇲🇦", "CMR": "🇨🇲", "NED": "🇳🇱"
+    "USA": "🇺🇸", "UKR": "🇺🇦", "BUL": "🇧🇬", "CRO": "🇭🇷", "MKD": "🇲🇰", "ROU": "🇷🇴", "ITA": "🇮🇹",
+    "ESP": "🇪🇸", "GER": "🇩🇪", "ISR": "🇮🇱", "GRE": "🇬🇷", "NED": "🇳🇱", "MAR": "🇲🇦", "CMR": "🇨🇲"
 }
 
-ROUND_NAMES = {
-    "FIN": "ФИНАЛ", "FNL": "ФИНАЛ",
-    "SFL": "1/2 ФИНАЛА", "SF": "1/2 ФИНАЛА",
-    "QFL": "1/4 ФИНАЛА", "QF": "1/4 ФИНАЛА",
-    "R16": "1/8 ФИНАЛА", "R32": "1/16 ФИНАЛА",
-    "R64": "1/32 ФИНАЛА", "R128": "1/64 ФИНАЛА",
-    "REP": "УТЕШИТЕЛЬНЫЙ", "BRZ": "ЗА 3 МЕСТО"
+COUNTRY_NAMES_RU = {
+    "RUS": "РОССИЯ", "BLR": "БЕЛАРУСЬ", "KAZ": "КАЗАХСТАН", "UZB": "УЗБЕКИСТАН", "KGZ": "КЫРГЫЗСТАН", 
+    "MGL": "МОНГОЛИЯ", "GEO": "ГРУЗИЯ", "ARM": "АРМЕНИЯ", "AZE": "АЗЕРБАЙДЖАН", "TJK": "ТАДЖИКИСТАН", 
+    "TKM": "ТУРКМЕНИСТАН", "AIN": "НЕЙТР. АТЛЕТ", "UKR": "УКРАИНА", "BUL": "БОЛГАРИЯ"
 }
 
-ROUND_PRIORITY = {
-    "FIN": 1, "FNL": 1, "SFL": 2, "SF": 2, "QFL": 3, "QF": 3,
-    "R16": 4, "R32": 5, "R64": 6, "R128": 7, "REP": 8, "BRZ": 1.5
-}
+DIVISIONS = {"Спортивное Самбо (М)": "samm", "Спортивное Самбо (Ж)": "samw", "Боевое Самбо (М)": "csmm", "Боевое Самбо (Ж)": "csmw"}
 
 # --- ФУНКЦИИ ---
 def get_flag(c): return FLAG_EMOJIS.get(str(c).upper().strip(), "🌍")
+def get_full_country(c): return COUNTRY_NAMES_RU.get(str(c).upper().strip(), str(c))
 
 def get_readable_cat(code):
     c = str(code).upper().strip()
-    p = ""
-    if "SAMM" in c: p = "Спорт М"
-    elif "SAMW" in c: p = "Спорт Ж"
-    elif "CSMM" in c: p = "Боевое М"
-    elif "CSMW" in c: p = "Боевое Ж"
+    p = "Спорт" if "SAM" in c else "Боевое" if "CSM" in c else ""
+    gender = "М" if "SAMM" in c or "CSMM" in c else "Ж" if "SAMW" in c or "CSMW" in c else ""
     w = ""
     if "ADT" in c:
         parts = c.split("ADT")
         if len(parts) > 1:
             raw = parts[1]
             w = (raw[:-1] + "+") if raw.endswith('O') else raw
-    return (p + " " + w + "кг").strip() if p else c
+    return f"{p} {gender} {w}кг".strip()
 
 @st.cache_data(ttl=3600)
 def load_data_v55():
@@ -121,74 +110,59 @@ def load_data_v55():
         df['blue_full_name'] = df['blue_first_name'].fillna('') + " " + df['blue_last_name'].fillna('')
         df['date_start'] = pd.to_datetime(df['date_start'], errors='coerce')
         df['Human_Category'] = df['category_code'].apply(get_readable_cat)
-        
-        # Точный поиск Даты Рождения (приоритет колонкам с 'birth' или 'dob')
-        dob_col = next((c for c in df.columns if 'birth' in c or 'dob' in c), None)
-        if dob_col:
-            df['athlete_dob'] = df[dob_col].fillna('Н/Д')
-        else:
-            df['athlete_dob'] = 'Н/Д'
-
-        df['red_score'] = pd.to_numeric(df['red_score'], errors='coerce').fillna(0).astype(int)
-        df['blue_score'] = pd.to_numeric(df['blue_score'], errors='coerce').fillna(0).astype(int)
-        
-        # Приоритет раундов для сортировки
-        df['round_rank'] = df['round_code'].apply(lambda x: ROUND_PRIORITY.get(str(x).upper(), 99))
+        # Обработка времени
+        df['fight_time_clean'] = df['fight_time'].fillna('0:00')
+        # Вес стадии для сортировки
+        df['round_rank'] = df['round_code'].apply(lambda x: ROUND_MAP.get(str(x).upper(), (0, str(x)))[0])
         return df
     except:
         return None
 
 df = load_data_v55()
 
-# --- ТЕЛЕГРАМ БОТ ---
+# --- ТЕЛЕГРАМ БОТ (Упрощенный для стабильности) ---
 def start_bot():
     bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
     @bot.message_handler(func=lambda m: True)
-    def search_tg(m):
+    def handle(m):
         q = m.text.strip().lower()
         if len(q) < 3: return
-        try:
-            data = pd.read_csv(DATABASE_FILE, low_memory=False)
-            data.columns = [c.strip().lower() for c in data.columns]
-            res = data[(data['red_last_name'].str.lower().str.contains(q, na=False)) | 
-                       (data['blue_last_name'].str.lower().str.contains(q, na=False))].copy()
-            if res.empty: return
-            res['date_start'] = pd.to_datetime(res['date_start'], errors='coerce')
-            res = res.sort_values(['date_start', 'round_code'], ascending=[False, True]).head(10)
-            msg = "👤 " + q.upper() + "\n" + "="*15 + "\n"
-            for _, r in res.iterrows():
-                is_win = "✅" if str(r['winner_athlete_id']) == (str(r['red_id']) if q in str(r['red_last_name']).lower() else str(r['blue_id'])) else "❌"
-                msg += is_win + " " + str(r['date_start'].year) + " | " + str(int(r['red_score'])) + ":" + str(int(r['blue_score'])) + "\n"
-            bot.send_message(m.chat.id, msg)
-        except: pass
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+        data = pd.read_csv(DATABASE_FILE, low_memory=False)
+        data.columns = [c.strip().lower() for c in data.columns]
+        res = data[(data['red_last_name'].str.lower().str.contains(q, na=False)) | (data['blue_last_name'].str.lower().str.contains(q, na=False))].head(5)
+        if res.empty: return
+        bot.send_message(m.chat.id, f"Найдено совпадений: {len(res)}. Проверьте досье на сайте.")
+    bot.infinity_polling(timeout=20)
 
 if "bot_active" not in st.session_state:
     threading.Thread(target=start_bot, daemon=True).start()
     st.session_state.bot_active = True
 
 # --- ИНТЕРФЕЙС ---
-st.title("FIGHTGURU DATA")
+st.title("FIGHTGURU DATA CENTER")
 
 if df is not None:
     nav = st.sidebar.radio("Меню", ["👤 Досье", "🏛️ Пантеон"])
 
     if nav == "👤 Досье":
-        search = st.text_input("Фамилия (Osipenko, Mikhailin...):").lower().strip()
+        search = st.text_input("Поиск (Osipenko, Mikhailin...):").lower().strip()
         if search:
             matches = df[(df['red_last_name'].str.lower().str.contains(search, na=False)) | 
                          (df['blue_last_name'].str.lower().str.contains(search, na=False))].copy()
             
             if not matches.empty:
-                # Сортировка: Сначала по дате (свежие вверху), затем по значимости раунда (Финал первый)
-                matches = matches.sort_values(by=['date_start', 'round_rank'], ascending=[False, True])
+                # Сортировка: Сначала свежие турниры, внутри турнира - от Финала к началу
+                matches = matches.sort_values(['date_start', 'round_rank'], ascending=[False, False])
                 
-                sample = matches.iloc[0]
-                is_red_sample = search in sample['red_last_name'].lower()
-                name_display = sample['red_full_name'] if is_red_sample else sample['blue_full_name']
+                # Извлекаем данные атлета (Д.Р. из нужной колонки)
+                first = matches.iloc[0]
+                is_red_first = search in str(first['red_last_name']).lower()
+                real_name = first['red_full_name'] if is_red_first else first['blue_full_name']
+                # Новые колонки дат рождения
+                birth_val = first['red_birth_date'] if is_red_first else first['blue_birth_date']
                 
-                st.subheader(name_display.upper())
-                st.markdown(f"<span class='dob-label'>Д.Р. {sample['athlete_dob']}</span>", unsafe_allow_html=True)
+                st.header(real_name.upper())
+                st.caption(f"📅 Дата рождения: {birth_val}")
                 st.divider()
 
                 for _, row in matches.iterrows():
@@ -198,33 +172,46 @@ if df is not None:
                     
                     opp_name = row['blue_full_name'] if is_red else row['red_full_name']
                     opp_country = row['blue_nationality_code'] if is_red else row['red_nationality_code']
-                    stage = ROUND_NAMES.get(str(row['round_code']).upper(), row['round_code'])
+                    
+                    # Стадия
+                    round_info = ROUND_MAP.get(str(row['round_code']).upper(), (0, str(row['round_code'])))[1]
                     
                     card_style = "win-card" if is_win else "loss-card"
-                    status_text = "ПОБЕДА" if is_win else "ПОРАЖЕНИЕ"
+                    status_txt = "ПОБЕДА" if is_win else "ПОРАЖЕНИЕ"
 
                     st.markdown(f"""
                     <div class="match-card {card_style}">
                         <div class="match-header">
                             <span>{row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '????'}</span>
-                            <span>{status_text}</span>
+                            <span class="round-badge">{round_info}</span>
                         </div>
                         <div class="match-tournament">{str(row['tournament_name']).upper()}</div>
                         <div class="match-main">
                             <div class="opponent-info">
                                 <div class="opponent-name">{opp_name}</div>
-                                <div class="opponent-country">{get_flag(opp_country)} {opp_country}</div>
-                                <div class="match-stage">{stage} | {row['Human_Category']}</div>
+                                <div class="opponent-country">{get_flag(opp_country)} {get_full_country(opp_country)}</div>
+                                <div class="match-cat">{row['Human_Category']}</div>
                             </div>
                             <div class="match-score">{int(row['red_score'])}:{int(row['blue_score'])}</div>
                         </div>
+                        <div class="match-time">⏱ ВРЕМЯ БОЯ: {row['fight_time_clean']} | {status_txt}</div>
                     </div>
                     """, unsafe_allow_html=True)
             else:
                 st.info("Атлет не найден.")
-    
+
     elif nav == "🏛️ Пантеон":
-        st.info("Раздел Пантеон активен. Используйте боковую панель для выбора дивизиона.")
+        # (Остается без изменений для статистики)
+        st.subheader("🏛️ Исторический Пантеон")
+        t_sel = st.selectbox("Турнир", list(TOURNAMENT_GROUPS.keys()))
+        d_sel = st.selectbox("Дивизион", list(DIVISIONS.keys()))
+        pattern = '|'.join(TOURNAMENT_GROUPS[t_sel])
+        f_data = df[(df['tournament_name'].str.contains(pattern, case=False, na=False)) & (df['category_code'].str.contains(DIVISIONS[d_sel], case=False, na=False))]
+        fin = f_data[f_data['round_code'].str.contains('FNL|FIN', case=False, na=False)].copy()
+        if not fin.empty:
+            def get_w(r): return (r['red_full_name'], r['red_nationality_code']) if str(r['winner_athlete_id']) == str(r['red_id']) else (r['blue_full_name'], r['blue_nationality_code'])
+            fin[['w_name', 'w_country']] = fin.apply(lambda r: pd.Series(get_w(r)), axis=1)
+            st.dataframe(fin.groupby('w_country').size().sort_values(ascending=False), use_container_width=True)
 
 st.sidebar.markdown("---")
 st.sidebar.write("FIGHTGURU | МИР САМБО")
