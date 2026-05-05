@@ -413,31 +413,85 @@ if "bot_active" not in st.session_state:
 
 if BOT_TOKEN and TELEBOT_AVAILABLE and not st.session_state.bot_active:
     try:
-        bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
+        bot    = telebot.TeleBot(BOT_TOKEN, threaded=False)
+        _df_bot = df  # явно захватываем df в замыкание — иначе поток его не видит
 
         @bot.message_handler(commands=['start'])
-        def welcome(m): bot.reply_to(m, "FIGHTGURU: введите фамилию атлета.")
+        def welcome(m):
+            bot.reply_to(m,
+                "🥋 FIGHTGURU\n\n"
+                "Введите фамилию атлета (латиницей).\n"
+                "Можно добавить имя через пробел: Kurzhev Ali"
+            )
 
         @bot.message_handler(func=lambda m: True)
         def bot_search(m):
-            q = m.text.strip().lower()
-            if len(q) < 3:
-                bot.reply_to(m, "Минимум 3 символа."); return
-            if df is not None:
-                res = df[
-                    df['red_last_name'].str.lower().str.contains(q, na=False) |
-                    df['blue_last_name'].str.lower().str.contains(q, na=False)
-                ].sort_values('date_start', ascending=False).head(5)
-                if not res.empty:
-                    msg = f"📊 {q.upper()}\n"
-                    for _, r in res.iterrows():
-                        yr = r['date_start'].year if pd.notna(r['date_start']) else "????"
-                        msg += f"\n🗓 {yr} | {str(r['tournament_name'])[:30]}\n{clean_int(r.get('red_score'))}:{clean_int(r.get('blue_score'))}\n"
-                    bot.send_message(m.chat.id, msg)
-                else:
-                    bot.reply_to(m, "Атлет не найден.")
+            raw   = m.text.strip()
+            parts = raw.lower().split()
+            if len(parts[0]) < 3:
+                bot.reply_to(m, "Введите минимум 3 символа."); return
+            if _df_bot is None:
+                bot.reply_to(m, "База данных недоступна."); return
 
-        threading.Thread(target=lambda: bot.infinity_polling(timeout=10), daemon=True).start()
+            # ищем по фамилии (первое слово), затем фильтруем по имени если дано
+            last_q = parts[0]
+            res = _df_bot[
+                _df_bot['red_last_name'].str.lower().str.contains(last_q, na=False) |
+                _df_bot['blue_last_name'].str.lower().str.contains(last_q, na=False)
+            ].copy()
+
+            if len(parts) >= 2:
+                first_q = parts[1]
+                res = res[
+                    res['red_first_name'].str.lower().str.startswith(first_q, na=False) |
+                    res['blue_first_name'].str.lower().str.startswith(first_q, na=False)
+                ]
+
+            if res.empty:
+                bot.reply_to(m, f"Атлет не найден: {raw}"); return
+
+            # определяем имя атлета
+            row0   = res.iloc[0]
+            if last_q in str(row0['red_last_name']).lower():
+                name = str(row0['red_full_name'])
+            else:
+                name = str(row0['blue_full_name'])
+
+            wins   = 0; losses = 0
+            for _, r in res.iterrows():
+                is_red = last_q in str(r['red_last_name']).lower()
+                wid    = str(r.get('winner_athlete_id',''))
+                mid    = str(r.get('red_id','') if is_red else r.get('blue_id',''))
+                if wid == mid and wid: wins += 1
+                else: losses += 1
+
+            recent = res.sort_values('date_start', ascending=False).head(3)
+            msg = (
+                f"📊 {name.upper()}\n"
+                f"Боёв: {wins+losses} | ✅ {wins} | ❌ {losses}\n\n"
+                f"Последние матчи:\n"
+            )
+            for _, r in recent.iterrows():
+                yr     = r['date_start'].year if pd.notna(r['date_start']) else "????"
+                is_red = last_q in str(r['red_last_name']).lower()
+                wid    = str(r.get('winner_athlete_id',''))
+                mid    = str(r.get('red_id','') if is_red else r.get('blue_id',''))
+                won    = (wid == mid and wid != '')
+                my_sc  = clean_int(r.get('red_score') if is_red else r.get('blue_score'))
+                op_sc  = clean_int(r.get('blue_score') if is_red else r.get('red_score'))
+                opp    = str(r['blue_full_name'] if is_red else r['red_full_name'])
+                res_e  = "✅" if won else "❌"
+                msg += f"{res_e} {yr} | {my_sc}:{op_sc} vs {opp[:20]}\n"
+
+            bot.send_message(m.chat.id, msg)
+
+        def _run_bot():
+            try:
+                bot.infinity_polling(timeout=15, long_polling_timeout=10)
+            except Exception as e:
+                pass  # тихо перезапустится при следующем старте приложения
+
+        threading.Thread(target=_run_bot, daemon=True).start()
         st.session_state.bot_active = True
     except Exception as e:
         pass
@@ -767,14 +821,30 @@ if nav == "👤 Досье":
     # ══════════════════════════════════════════
     with tab_matches:
 
-        filter_options = ["Все","Победы","Поражения","Финалы"]
-        cols = st.columns(len(filter_options)+1)
-        cols[0].markdown("<span style='font-size:13px;color:#555;'>Показать:</span>", unsafe_allow_html=True)
-        for i, opt in enumerate(filter_options):
-            btn_type = "primary" if st.session_state.filter_mode == opt else "secondary"
-            if cols[i+1].button(opt, key=f"flt_{opt}", type=btn_type):
-                st.session_state.filter_mode = opt
-                st.rerun()
+        # Фильтры — HTML-ссылки, не Streamlit-кнопки (те белые на тёмном фоне)
+        fm_cur      = st.session_state.filter_mode
+        filter_opts = ["Все", "Победы", "Поражения", "Финалы"]
+        btns_html   = ""
+        for opt in filter_opts:
+            if opt == fm_cur:
+                sty = "background:#c0392b;color:#fff;border-color:#c0392b;"
+            else:
+                sty = "background:#1c1e28;color:#999;border-color:#2a2d3a;"
+            btns_html += (
+                f'<a href="?filter={opt}" style="text-decoration:none;">' +
+                f'<span style="display:inline-block;font-size:13px;font-weight:600;' +
+                f'padding:8px 18px;border-radius:8px;border:1.5px solid;' +
+                f'white-space:nowrap;{sty}">{opt}</span></a> '
+            )
+        st.markdown(
+            f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
+            btns_html + '</div>',
+            unsafe_allow_html=True,
+        )
+        qp = st.query_params.get("filter", fm_cur)
+        if qp in filter_opts and qp != st.session_state.filter_mode:
+            st.session_state.filter_mode = qp
+            st.rerun()
 
         current_year = None
         for _, row in matches.iterrows():
