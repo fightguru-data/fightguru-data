@@ -1,10 +1,4 @@
-FIGHTGURU v5 — чистая финальная версия
-Fixes:
-  1. Фильтры: используем st.radio (надёжно, без хаков с невидимыми кнопками)
-  2. Выбор атлета: вся карточка кликабельна через st.button с overlay
-  3. Бот: threading.Thread + явный snapshot df — multiprocessing ломается на Streamlit Cloud
-  4. Поле поиска: value= без key= чтобы можно было писать в session_state.sq из кода
-"""
+# FIGHTGURU v5
 
 import streamlit as st
 import pandas as pd
