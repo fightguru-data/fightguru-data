@@ -1340,4 +1340,677 @@ with tab_w:
 
 st.markdown("<hr style='border-color:#111318;margin-top:50px'>"
             "<p style='text-align:center;color:#1a1c28;font-size:11px'>FightGuru v5</p>",
+            unsafe_allow_html=True)# ТУРНИР — простой и надёжный просмотр по раундам
+# ─────────────────────────────────────────────────────────────────────────────
+if nav == "🏆 Турнир":
+    st.markdown("<h2 style='color:#f0f4ff;margin-bottom:16px'>🏆 Турнирная сетка</h2>",
+                unsafe_allow_html=True)
+
+    MAIN_ROUNDS   = ['R128','R64','R32','R16','QFL','SFL','FNL','FIN']
+    REP_ROUNDS    = ['RP1','RP2']
+    BRONZE_ROUNDS = ['BR1','BR2']
+    ROUND_LABELS  = {
+        'R128':'1/64 финала','R64':'1/32 финала','R32':'1/16 финала','R16':'1/8 финала',
+        'QFL':'1/4 финала','SFL':'1/2 финала','FNL':'Финал','FIN':'Финал',
+        'RP1':'Утешительный раунд 1','RP2':'Утешительный раунд 2',
+        'BR1':'Бой за бронзу','BR2':'Бой за бронзу',
+    }
+
+    # Выбор турнира
+    tour_df   = df[['tournament_name','date_start']].dropna().drop_duplicates('tournament_name')
+    tour_list = tour_df.sort_values('date_start', ascending=False)['tournament_name'].tolist()
+    sel_tour  = st.selectbox("Турнир", tour_list)
+
+    td = df[df['tournament_name'] == sel_tour].copy()
+    if td.empty:
+        st.warning("Нет данных."); st.stop()
+
+    cats    = sorted(td['category_code'].unique())
+    sel_cat = st.selectbox("Категория", cats, format_func=lambda c: get_cat(c))
+    cd      = td[td['category_code'] == sel_cat].copy()
+    if cd.empty:
+        st.warning("Нет матчей."); st.stop()
+
+    is_combat = 'CSM' in str(sel_cat).upper()
+    all_rc    = set(cd['round_code'].str.upper().unique())
+
+    main_present  = [r for r in MAIN_ROUNDS   if r in all_rc]
+    rep_present   = [] if is_combat else [r for r in REP_ROUNDS    if r in all_rc]
+    brnz_present  = [] if is_combat else [r for r in BRONZE_ROUNDS if r in all_rc]
+
+    def get_rnd(rc):
+        return cd[cd['round_code'].str.upper() == rc].copy().reset_index(drop=True)
+
+    def render_match(m, medal=None):
+        """Рендерит одну карточку матча как HTML."""
+        wid = str(m.get('winner_athlete_id','') or '')
+        rid = str(m.get('red_id','') or '')
+        bid = str(m.get('blue_id','') or '')
+        rw  = (wid == rid and wid != '')
+        bw  = (wid == bid and wid != '')
+
+        rn  = str(m.get('red_full_name','')).strip()
+        bn  = str(m.get('blue_full_name','')).strip()
+        rc_ = str(m.get('red_nationality_code','')).upper()
+        bc_ = str(m.get('blue_nationality_code','')).upper()
+        rs  = ci(m.get('red_score', 0))
+        bs  = ci(m.get('blue_score', 0))
+        t   = fmt_time(m.get('fight_time', 0))
+
+        def row(name, cnt, score, is_win):
+            bg  = 'background:#071a0f;' if is_win else ''
+            nc  = '#5ae090' if is_win else '#9093ab'
+            sc  = '#2ecc71' if is_win else '#3d4058'
+            fw  = '700'     if is_win else '400'
+            return (
+                f'<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;{bg}">'
+                f'<span style="font-size:14px">{fl(cnt)}</span>'
+                f'<span style="font-size:12px;color:#606480;font-weight:500">{cn(cnt)}</span>'
+                f'<span style="flex:1;font-size:13px;font-weight:{fw};color:{nc};'
+                f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{name}</span>'
+                f'<span style="font-size:14px;font-weight:700;color:{sc};margin-left:6px">{score}</span>'
+                f'</div>'
+            )
+
+        medal_html = f'<div style="font-size:22px;text-align:center;padding:6px 0">{medal}</div>' if medal else ''
+
+        return (
+            f'<div style="background:#161720;border:1px solid #272a3a;border-radius:12px;'
+            f'overflow:hidden;margin-bottom:8px">'
+            f'{medal_html}'
+            + row(rn, rc_, rs, rw)
+            + f'<div style="height:1px;background:#1e2030"></div>'
+            + row(bn, bc_, bs, bw)
+            + f'<div style="padding:5px 10px;border-top:1px solid #1e2030;'
+            f'font-size:11px;color:#3d4058">⏱ {t}</div>'
+            f'</div>'
+        )
+
+    def winner_of(ms):
+        if ms is None or len(ms) == 0: return None, None, None
+        m   = ms.iloc[0]
+        wid = str(m.get('winner_athlete_id','') or '')
+        if wid and wid == str(m.get('red_id','') or ''):
+            return str(m.get('red_full_name','')).strip(), str(m.get('red_last_name','')).strip(), str(m.get('red_nationality_code','')).upper()
+        return str(m.get('blue_full_name','')).strip(), str(m.get('blue_last_name','')).strip(), str(m.get('blue_nationality_code','')).upper()
+
+    # ── ОСНОВНАЯ СЕТКА ────────────────────────────────────────────────────────
+    # Финал — показываем отдельно и крупно вверху
+    final_rc = None
+    for r in ['FNL','FIN']:
+        if r in all_rc:
+            final_rc = r; break
+
+    if final_rc:
+        final_ms = get_rnd(final_rc)
+        if not final_ms.empty:
+            wname, wlast, wcnt = winner_of(final_ms)
+            # Победитель — большая карточка
+            st.markdown(
+                f'<div style="background:linear-gradient(135deg,#1a0c0c,#161720);'
+                f'border:1px solid #c0392b44;border-radius:16px;padding:16px 18px;margin-bottom:16px">'
+                f'<div style="font-size:11px;font-weight:800;color:#c0392b;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin-bottom:10px">🏆 Финал</div>'
+                + render_match(final_ms.iloc[0], medal=None)
+                + (f'<div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #2a1a1a">'
+                   f'<span style="font-size:24px">🥇</span>'
+                   f'<div><div style="font-size:15px;font-weight:700;color:#f0f4ff">{wname}</div>'
+                   f'<div style="font-size:12px;color:#606480">{fl(wcnt)} {cn(wcnt)}</div></div>'
+                   f'</div>' if wname else '')
+                + '</div>',
+                unsafe_allow_html=True
+            )
+
+    # Полуфиналы и раньше — показываем по раундам с вкладками
+    semi_and_earlier = [r for r in main_present if r not in ('FNL','FIN')]
+
+    if semi_and_earlier:
+        st.markdown(
+            "<p style='font-size:10px;font-weight:800;color:#52566e;"
+            "text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px'>"
+            "Остальные раунды</p>",
+            unsafe_allow_html=True
+        )
+
+        # Показываем раунды в обратном порядке (от полуфинала к первому раунду)
+        tab_labels = [ROUND_LABELS.get(r, r) for r in reversed(semi_and_earlier)]
+        tab_rcs    = list(reversed(semi_and_earlier))
+
+        if len(tab_rcs) == 1:
+            # Один раунд — без вкладок
+            ms = get_rnd(tab_rcs[0])
+            html = ''
+            for _, m in ms.iterrows():
+                html += render_match(m)
+            st.markdown(html, unsafe_allow_html=True)
+        else:
+            tabs = st.tabs(tab_labels)
+            for tab, rc in zip(tabs, tab_rcs):
+                with tab:
+                    ms = get_rnd(rc)
+                    html = ''
+                    for _, m in ms.iterrows():
+                        html += render_match(m)
+                    st.markdown(html, unsafe_allow_html=True)
+
+    # ── УТЕШИТЕЛЬНАЯ СЕТКА (только спортивное самбо) ─────────────────────────
+    if not is_combat and (rep_present or brnz_present):
+        st.markdown(
+            "<p style='font-size:10px;font-weight:800;color:#b8860b;"
+            "text-transform:uppercase;letter-spacing:.1em;"
+            "margin-top:24px;margin-bottom:10px;padding-top:14px;"
+            "border-top:1px solid #2a2200'>"
+            "🥉 Утешительная сетка (Repechage)</p>",
+            unsafe_allow_html=True
+        )
+
+        rep_labels = [ROUND_LABELS.get(r, r) for r in (rep_present + brnz_present)]
+        rep_rcs    = rep_present + brnz_present
+
+        if len(rep_rcs) == 1:
+            ms = get_rnd(rep_rcs[0])
+            html = ''
+            for _, m in ms.iterrows():
+                html += render_match(m)
+            st.markdown(html, unsafe_allow_html=True)
+        else:
+            tabs = st.tabs(rep_labels)
+            for tab, rc in zip(tabs, rep_rcs):
+                with tab:
+                    ms = get_rnd(rc)
+                    is_brnz = rc in BRONZE_ROUNDS
+                    html = ''
+                    for _, m in ms.iterrows():
+                        medal = '🥉' if is_brnz else None
+                        html += render_match(m, medal=medal)
+                    st.markdown(html, unsafe_allow_html=True)
+
+        # Два бронзовых призёра
+        brnz_winners = []
+        for rc in brnz_present:
+            ms = get_rnd(rc)
+            bn, bl, bc = winner_of(ms)
+            if bn: brnz_winners.append((bn, bl, bc))
+
+        if brnz_winners:
+            bhtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
+            for bn, bl, bc in brnz_winners:
+                bhtml += (
+                    f'<div style="background:#161720;border:1px solid #b8860b44;'
+                    f'border-radius:12px;padding:12px 16px;min-width:160px">'
+                    f'<div style="font-size:22px;margin-bottom:6px">🥉</div>'
+                    f'<div style="font-size:13px;font-weight:700;color:#f0f4ff">{bn}</div>'
+                    f'<div style="font-size:12px;color:#606480;margin-top:3px">{fl(bc)} {cn(bc)}</div>'
+                    f'</div>'
+                )
+            bhtml += '</div>'
+            st.markdown(bhtml, unsafe_allow_html=True)
+
+    # ── КНОПКИ ПЕРЕХОДА В ДОСЬЕ ───────────────────────────────────────────────
+    st.markdown("")
+    final_ms = get_rnd(final_rc) if final_rc else None
+    wname, wlast, wcnt = winner_of(final_ms)
+    nav_cols = st.columns(2)
+    with nav_cols[0]:
+        if wname and st.button(f"-> Досье чемпиона: {wname}", use_container_width=True):
+            st.session_state.sq = wlast; st.session_state.prev_sq = ""
+            st.session_state.sel = None; st.rerun()
+
+    if not is_combat:
+        bi = 0
+        for rc in brnz_present:
+            ms = get_rnd(rc)
+            bn, bl, bc = winner_of(ms)
+            if bn:
+                with nav_cols[bi % 2]:
+                    if st.button(f"-> Досье: {bn}", key=f"br_{bi}", use_container_width=True):
+                        st.session_state.sq = bl; st.session_state.prev_sq = ""
+                        st.session_state.sel = None; st.rerun()
+                bi += 1
+
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ПАНТЕОН
+# ─────────────────────────────────────────────────────────────────────────────
+if nav == "🏛️ Пантеон":
+    st.markdown("<h2 style='color:#f0f4ff;margin-bottom:20px'>🏛️ Исторический Пантеон</h2>",
+                unsafe_allow_html=True)
+    c1,c2 = st.columns(2)
+    with c1: tsel = st.selectbox("Турнир",   list(TOUR_GROUPS.keys()))
+    with c2: dsel = st.selectbox("Дивизион", list(DIVISIONS.keys()))
+
+    pat = '|'.join(TOUR_GROUPS[tsel])
+    fd  = df[df['tournament_name'].str.contains(pat,case=False,na=False) &
+             df['category_code'].str.contains(DIVISIONS[dsel],case=False,na=False)]
+    fm  = fd[fd['round_code'].str.upper().str.contains('FNL|FIN',na=False)].copy()
+
+    if fm.empty: st.warning("Нет данных."); st.stop()
+
+    def _gw(r):
+        if str(r['winner_athlete_id'])==str(r['red_id']):
+            return r['red_full_name'], str(r['red_nationality_code']).upper()
+        return r['blue_full_name'], str(r['blue_nationality_code']).upper()
+
+    fm[['wn','wc']] = fm.apply(lambda r: pd.Series(_gw(r)), axis=1)
+
+    st.markdown("**Зачёт по странам — 🥇 Золото**")
+    stats = fm.groupby('wc').size().reset_index(name='g').sort_values('g',ascending=False)
+    rows  = "".join(f"<tr><td>{fl(r['wc'])} {cn(r['wc'])}</td><td class='gold-n'>{r['g']}</td></tr>"
+                    for _,r in stats.iterrows())
+    st.markdown(f"<table class='gold-t'><thead><tr><th>Страна</th><th>Золото</th></tr></thead>"
+                f"<tbody>{rows}</tbody></table>", unsafe_allow_html=True)
+
+    st.markdown("**По весам**")
+    for cat in sorted(fm['category_code'].unique()):
+        cdf = fm[fm['category_code']==cat].sort_values('date_start',ascending=False)
+        with st.expander(get_cat(cat)):
+            for _,cr in cdf.iterrows():
+                yr = int(cr['date_start'].year) if pd.notna(cr['date_start']) else "?"
+                st.markdown(f"**{yr}** &nbsp; {fl(cr['wc'])} {cr['wn']}", unsafe_allow_html=True)
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ДОСЬЕ — ПОИСК
+# Используем value= без key= чтобы можно было писать в session_state.sq из кода.
+# on_change сбрасывает фильтр и выбор при новом вводе.
+# ─────────────────────────────────────────────────────────────────────────────
+def _on_change():
+    new_val = st.session_state.get("_sq_inp","").strip()
+    if new_val != st.session_state.sq:
+        st.session_state.sq      = new_val
+        st.session_state.prev_sq = new_val
+        st.session_state.sel     = None
+        st.session_state.filter  = "Все"
+
+st.text_input("", value=st.session_state.sq, key="_sq_inp",
+              placeholder="🔍  Фамилия атлета — или «Фамилия Имя»",
+              label_visibility="collapsed", on_change=_on_change)
+
+sq = st.session_state.sq.strip()
+
+if not sq:
+    st.markdown("<p style='color:#2a2d3d;font-size:15px;margin-top:60px;text-align:center'>"
+                "Введите фамилию атлета</p>", unsafe_allow_html=True)
+    st.stop()
+
+parts = sq.lower().split()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ПОИСК
+# ─────────────────────────────────────────────────────────────────────────────
+def match_side(row, pts):
+    for side in ("red","blue"):
+        last  = str(row.get(f"{side}_last_name","")).lower().strip()
+        first = str(row.get(f"{side}_first_name","")).lower().strip()
+        if len(pts)==1:
+            if pts[0]==last: return side
+        else:
+            if (pts[0]==last and first.startswith(pts[1])) or \
+               (pts[1]==last and first.startswith(pts[0])): return side
+    return None
+
+exact = []
+for idx, row in df.iterrows():
+    s = match_side(row, parts)
+    if s is not None:
+        exact.append((idx, s))
+
+if not exact:
+    for idx, row in df.iterrows():
+        for side in ("red","blue"):
+            if parts[0] in str(row.get(f"{side}_last_name","")).lower():
+                exact.append((idx, side)); break
+
+if not exact:
+    st.info("Атлет не найден."); st.stop()
+
+idxs    = list(dict.fromkeys([x[0] for x in exact]))
+matches = df.loc[idxs].copy().sort_values(['date_start','round_rank'],ascending=[False,False])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# СПИСОК НАЙДЕННЫХ АТЛЕТОВ
+# ─────────────────────────────────────────────────────────────────────────────
+athletes = {}
+for idx, row in matches.iterrows():
+    side = match_side(row, parts)
+    if side is None:
+        for s in ("red","blue"):
+            if parts[0] in str(row.get(f"{s}_last_name","")).lower():
+                side = s; break
+    if side is None: continue
+    fn  = str(row.get(f"{side}_full_name","")).strip()
+    cde = str(row.get(f"{side}_nationality_code","")).upper()
+    if fn and fn not in athletes:
+        athletes[fn] = {"country": cde}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ЭКРАН ВЫБОРА — ВСЯ КАРТОЧКА КЛИКАБЕЛЬНА
+# ─────────────────────────────────────────────────────────────────────────────
+if len(athletes) > 1 and st.session_state.sel not in athletes:
+    st.markdown(
+        f"<p style='font-size:16px;color:#dde0ef;margin-bottom:16px'>"
+        f"Найдено <b>{len(athletes)}</b> атлета — выберите:</p>",
+        unsafe_allow_html=True
+    )
+    for aname, info in athletes.items():
+        # st.button занимает всю ширину — это и есть кликабельная карточка
+        label = f"{fl(info['country'])}  {aname}  ·  {cn(info['country'])}"
+        if st.button(label, key=f"pick_{aname}", use_container_width=True):
+            st.session_state.sel = aname
+            st.rerun()
+    st.stop()
+
+# Выбор
+if st.session_state.sel in athletes:
+    chosen = st.session_state.sel
+else:
+    chosen = list(athletes.keys())[0]
+
+chosen_low = chosen.lower().strip()
+
+matches = matches[matches.apply(
+    lambda r: str(r.get('red_full_name','')).lower().strip()==chosen_low or
+              str(r.get('blue_full_name','')).lower().strip()==chosen_low,
+    axis=1
+)].copy()
+
+if matches.empty: st.info("Матчи не найдены."); st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ДАННЫЕ АТЛЕТА
+# ─────────────────────────────────────────────────────────────────────────────
+dob_list=[]; cnt_list=[]; final_name=""
+for _,r in matches.iterrows():
+    for side in ("red","blue"):
+        if str(r.get(f"{side}_full_name","")).lower().strip()==chosen_low:
+            final_name = str(r.get(f"{side}_full_name","")).strip()
+            v = r.get(f"{side}_birth_date")
+            if v and pd.notna(v): dob_list.append(str(v).strip())
+            cnt_list.append(str(r.get(f"{side}_nationality_code","")).upper())
+            break
+
+raw_dob  = max(set(dob_list),key=dob_list.count) if dob_list else ""
+dob_fmt  = fmt_dob(raw_dob)
+age_str  = calc_age(raw_dob)
+acountry = max(set(cnt_list),key=cnt_list.count) if cnt_list else ""
+
+wins=losses=finals_c=0; win_seq=[]; recent_q=[]
+for _,row in matches.iterrows():
+    is_r = str(row.get('red_full_name','')).lower().strip()==chosen_low
+    wid  = str(row.get('winner_athlete_id',''))
+    mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
+    won  = (wid==mid and wid!='')
+    if won: wins+=1
+    else:   losses+=1
+    rc = str(row.get('round_code','')).upper()
+    if rc in FINALS_CODES: finals_c+=1
+    win_seq.append(won)
+    if len(recent_q)<3:
+        opp  = str(row['blue_full_name'] if is_r else row['red_full_name']).strip()
+        ocnt = row['blue_nationality_code'] if is_r else row['red_nationality_code']
+        msc  = ci(row.get('red_score') if is_r else row.get('blue_score'))
+        osc  = ci(row.get('blue_score') if is_r else row.get('red_score'))
+        rl   = ROUND_MAP.get(rc,(0,'?'))[1]
+        recent_q.append({"opp":opp,"ofl":fl(ocnt),"res":"W" if won else "L",
+                          "sc":f"{msc}:{osc}","rnd":rl})
+
+total   = wins+losses
+winrate = round(wins/total*100) if total else 0
+
+s_type="win"; s_n=0
+if win_seq:
+    s_type = "win" if win_seq[0] else "loss"
+    for w in win_seq:
+        if (w and s_type=="win") or (not w and s_type=="loss"): s_n+=1
+        else: break
+
+main_cat=""
+if 'category_code' in matches.columns:
+    cc = matches['category_code'].value_counts()
+    if not cc.empty: main_cat = get_cat(cc.index[0])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# РЕЖИМ КАМЕРЫ
+# ─────────────────────────────────────────────────────────────────────────────
+if st.session_state.cam:
+    qk = f"q_{chosen}"
+    if qk not in st.session_state.questions:
+        st.session_state.questions[qk] = gen_q(
+            final_name,acountry,age_str,wins,losses,finals_c,total,recent_q)
+    qs = st.session_state.questions[qk]
+    streak_h=""
+    if s_n>=2:
+        ico="🔥" if s_type=="win" else "❄️"
+        lbl=f"Серия: {s_n} {'побед' if s_type=='win' else 'поражений'}"
+        cls="sp-win" if s_type=="win" else "sp-loss"
+        streak_h=f'<span class="streak-pill {cls}">{ico} {lbl}</span>'
+    qhtml="".join(f'<div class="cam-q"><div class="cam-qn">Вопрос {i+1}</div>'
+                  f'<div class="cam-qt">{q}</div></div>' for i,q in enumerate(qs))
+    st.markdown(f"""
+    <div class="cam-wrap">
+      <div class="cam-name">{final_name}</div>
+      <div class="cam-sub">{fl(acountry)} {cn(acountry)} · {dob_fmt} · {age_str}</div>
+      {streak_h}
+      <div class="cam-stats" style="margin-top:20px">
+        <div class="cam-s"><div class="cam-n w">{total}</div><div class="cam-sl">Боёв</div></div>
+        <div class="cam-s"><div class="cam-n g">{wins}</div><div class="cam-sl">Победы</div></div>
+        <div class="cam-s"><div class="cam-n r">{losses}</div><div class="cam-sl">Пораж.</div></div>
+        <div class="cam-s"><div class="cam-n y">{winrate}%</div><div class="cam-sl">% побед</div></div>
+      </div>
+      {qhtml}
+    </div>
+    """, unsafe_allow_html=True)
+    c1,c2 = st.columns(2)
+    with c1:
+        if st.button("🔄 Другие вопросы",use_container_width=True):
+            st.session_state.questions[qk]=gen_q(
+                final_name,acountry,age_str,wins,losses,finals_c,total,recent_q)
+            st.rerun()
+    with c2:
+        if st.button("✖ Выйти",use_container_width=True):
+            st.session_state.cam=False; st.rerun()
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ПРОФИЛЬ
+# ─────────────────────────────────────────────────────────────────────────────
+if len(athletes)>1:
+    if st.button("← Другой атлет"):
+        st.session_state.sel=None; st.rerun()
+
+streak_h=""
+if s_n>=2:
+    ico="🔥" if s_type=="win" else "❄️"
+    lbl=f"Серия: {s_n} {'побед' if s_type=='win' else 'поражений'} подряд"
+    cls="sp-win" if s_type=="win" else "sp-loss"
+    streak_h=f'<div style="margin-top:10px"><span class="streak-pill {cls}">{ico} {lbl}</span></div>'
+
+meta=[]
+if dob_fmt: meta.append(f"Дата рождения: {dob_fmt}")
+if age_str: meta.append(age_str)
+if main_cat: meta.append(main_cat)
+
+st.markdown(f"""
+<div class="profile-wrap">
+  <div class="avatar">{inits(final_name)}</div>
+  <div style="min-width:0;flex:1">
+    <div class="p-name">{final_name}</div>
+    <div class="p-country">{fl(acountry)} {cn(acountry)}</div>
+    <div class="p-sub">{"&nbsp;&nbsp;·&nbsp;&nbsp;".join(meta)}</div>
+    {streak_h}
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown(f"""
+<div class="stat-grid">
+  <div class="sc"><div class="sc-l">Боёв</div><div class="sc-v">{total}</div></div>
+  <div class="sc"><div class="sc-l">Победы</div><div class="sc-v g">{wins}</div></div>
+  <div class="sc"><div class="sc-l">Пораж.</div><div class="sc-v r">{losses}</div></div>
+  <div class="sc"><div class="sc-l">% побед</div><div class="sc-v y">{winrate}%</div></div>
+</div>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ВКЛАДКИ
+# ─────────────────────────────────────────────────────────────────────────────
+tab_m, tab_i, tab_w = st.tabs(["🥊 Матчи","🎙 Интервью","📖 Справка"])
+
+# ═══════════════  МАТЧИ  ═══════════════
+with tab_m:
+    # ФИЛЬТР — st.radio с CSS-стилизацией под pill-кнопки (надёжнее любых хаков)
+    cur_filter = st.radio(
+        "Фильтр",
+        ["Все","Победы","Поражения","Финалы"],
+        index=["Все","Победы","Поражения","Финалы"].index(st.session_state.filter),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="filter_radio"
+    )
+    if cur_filter != st.session_state.filter:
+        st.session_state.filter = cur_filter
+        st.rerun()
+
+    cur_year=None; shown=0
+    for _,row in matches.iterrows():
+        is_r = str(row.get('red_full_name','')).lower().strip()==chosen_low
+        wid  = str(row.get('winner_athlete_id',''))
+        mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
+        won  = (wid==mid and wid!='')
+        rc   = str(row.get('round_code','')).upper()
+
+        if st.session_state.filter=="Победы"    and not won:          continue
+        if st.session_state.filter=="Поражения" and won:              continue
+        if st.session_state.filter=="Финалы"    and rc not in FINALS_CODES: continue
+
+        msc  = ci(row.get('red_score')  if is_r else row.get('blue_score'))
+        osc  = ci(row.get('blue_score') if is_r else row.get('red_score'))
+        mpen = ci(row.get('red_penalties')  if is_r else row.get('blue_penalties'))
+        open_= ci(row.get('blue_penalties') if is_r else row.get('red_penalties'))
+        opp_full = str(row['blue_full_name'] if is_r else row['red_full_name']).strip()
+        opp_last = str(row['blue_last_name'] if is_r else row['red_last_name']).strip()
+        opp_cnt  = str(row['blue_nationality_code'] if is_r else row['red_nationality_code'])
+        rl   = ROUND_MAP.get(rc,(0,rc))[1]
+        cat  = get_cat(row.get('category_code',''))
+        ds   = row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '??'
+        yr   = row.get('year')
+        ts   = fmt_time(row.get('fight_time',0))
+        cls  = "win" if won else "loss"
+        lbl  = "WIN" if won else "LOSS"
+
+        if pd.notna(yr) and int(yr)!=cur_year:
+            cur_year=int(yr)
+            st.markdown(f'<div class="yr-sep">{cur_year}</div>',unsafe_allow_html=True)
+
+        tags=f'<span class="tag rnd">{rl}</span><span class="tag">{cat}</span>'
+        if mpen>0 or open_>0:
+            tags+=f'<span class="tag pen">Пред. {mpen}/{open_}</span>'
+
+        st.markdown(f"""
+        <div class="mc {cls}">
+          <div class="badge {cls}">
+            <span class="bs {cls}">{msc}:{osc}</span>
+            <span class="bl {cls}">{lbl}</span>
+          </div>
+          <div style="min-width:0;overflow:hidden">
+            <div class="m-tour">{str(row.get('tournament_name',''))}</div>
+            <div class="m-opp">
+              <span style="font-size:16px">{fl(opp_cnt)}</span>
+              <span class="m-cnt">{cn(opp_cnt)}</span>
+              {opp_full}
+            </div>
+            <div class="m-tags">{tags}</div>
+          </div>
+          <div class="m-right">
+            <div class="m-date">{ds}</div>
+            <div class="m-time">⏱ {ts}</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button(f"→ Досье: {opp_full}", key=f"ob_{row.name}"):
+            st.session_state.sq      = opp_last
+            st.session_state.prev_sq = ""
+            st.session_state.sel     = None
+            st.session_state.filter  = "Все"
+            st.rerun()
+
+        shown+=1
+
+    if shown==0:
+        st.markdown("<p style='color:#3d4058;text-align:center;padding:40px 0'>"
+                    "Нет матчей по выбранному фильтру</p>", unsafe_allow_html=True)
+
+# ═══════════════  ИНТЕРВЬЮ  ═══════════════
+with tab_i:
+    st.markdown(f"#### 🎙 Блиц-интервью — {final_name}")
+    st.caption("Вопросы генерируются автоматически на основе данных карьеры")
+    qk = f"q_{chosen}"
+    if qk not in st.session_state.questions:
+        st.session_state.questions[qk]=gen_q(
+            final_name,acountry,age_str,wins,losses,finals_c,total,recent_q)
+    qs=st.session_state.questions[qk]
+    for i,q in enumerate(qs):
+        st.markdown(f'<div class="q-card"><div class="q-num">{i+1}</div>'
+                    f'<div class="q-text">{q}</div></div>',unsafe_allow_html=True)
+    if st.button("🔄 Другие вопросы",key="rq"):
+        st.session_state.questions[qk]=gen_q(
+            final_name,acountry,age_str,wins,losses,finals_c,total,recent_q)
+        st.rerun()
+    st.markdown("---")
+    st.markdown("#### 💾 Записать ответы")
+    answers=[]
+    for i,q in enumerate(qs):
+        a=st.text_area(f"Ответ {i+1}",key=f"ans_{i}_{chosen}",
+                       placeholder=f"«{q[:55]}…»",height=80)
+        answers.append({"question":q,"answer":a})
+    if st.button("💾 Сохранить интервью",type="primary",key="save"):
+        filled=[x for x in answers if x["answer"].strip()]
+        if filled:
+            now=datetime.now().strftime("%d.%m.%Y %H:%M")
+            save_ivw(final_name,now,answers)
+            st.success(f"✅ Сохранено — {now}")
+        else: st.warning("Заполните хотя бы один ответ.")
+    past=load_ivw().get(final_name.strip().upper(),[])
+    if past:
+        st.markdown("---")
+        st.markdown(f"#### 📂 Прошлые интервью — {final_name}")
+        for ivw in reversed(past):
+            with st.expander(f"🗓 {ivw['date']}"):
+                for item in ivw['answers']:
+                    if item.get('answer','').strip():
+                        st.markdown(f"**В:** {item['question']}")
+                        st.markdown(f"**О:** {item['answer']}")
+                        st.markdown("---")
+
+# ═══════════════  СПРАВКА  ═══════════════
+with tab_w:
+    st.markdown(f"#### 📖 Справка — {final_name}")
+    wiki={}
+    for variant in [final_name," ".join(reversed(final_name.split()))]:
+        wiki=wiki_get(variant)
+        if wiki: break
+    if wiki:
+        lng="Wikipedia RU" if wiki.get("lang")=="ru" else "Wikipedia EN"
+        url_html=(f"<a class='wiki-link' href='{wiki['url']}' target='_blank'>"
+                  f"→ Читать полностью на Wikipedia</a>") if wiki.get("url") else ""
+        st.markdown(f'<div class="wiki-box"><div class="wiki-lbl">{lng} — {wiki["title"]}</div>'
+                    f'<div class="wiki-text">{wiki["extract"]}</div>{url_html}</div>',
+                    unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="wiki-box"><div class="wiki-lbl">Wikipedia</div>'
+                    f'<div class="wiki-text" style="color:#3d4058">Статья о <b style="color:#606480">'
+                    f'{final_name}</b> не найдена.</div></div>',unsafe_allow_html=True)
+    ne=final_name.replace(' ','+'); nt=final_name.replace(' ','').lower()
+    st.markdown(f'<div class="ref-grid">'
+                f'<a class="ref-a" href="https://www.google.com/search?q={ne}+самбо" target="_blank">🔍 Google</a>'
+                f'<a class="ref-a" href="https://ru.wikipedia.org/w/index.php?search={ne}" target="_blank">📖 Wikipedia</a>'
+                f'<a class="ref-a" href="https://www.youtube.com/results?search_query={ne}+sambo" target="_blank">▶ YouTube</a>'
+                f'<a class="ref-a" href="https://www.instagram.com/explore/tags/{nt}/" target="_blank">📷 Instagram</a>'
+                f'<a class="ref-a" href="https://t.me/search?query={ne}" target="_blank">✈ Telegram</a>'
+                f'</div>', unsafe_allow_html=True)
+
+st.markdown("<hr style='border-color:#111318;margin-top:50px'>"
+            "<p style='text-align:center;color:#1a1c28;font-size:11px'>FightGuru v5</p>",
             unsafe_allow_html=True)
