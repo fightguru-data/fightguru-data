@@ -1,4 +1,3 @@
-"""
 FIGHTGURU v5 — чистая финальная версия
 Fixes:
   1. Фильтры: используем st.radio (надёжно, без хаков с невидимыми кнопками)
@@ -9,14 +8,8 @@ Fixes:
 
 import streamlit as st
 import pandas as pd
-import os, json, random, threading, requests
+import os, json, random, requests
 from datetime import datetime
-
-try:
-    import telebot
-    TELEBOT_OK = True
-except ImportError:
-    TELEBOT_OK = False
 
 # ─────────────────────────────────────────────────────────────────────────────
 # КОНФИГ
@@ -275,6 +268,64 @@ div[data-testid="stButton"] > button:hover {
 .cam-qn { font-size: 12px; color: #e05040; font-weight: 800; margin-bottom: 7px; text-transform: uppercase; letter-spacing:.08em; }
 .cam-qt { font-size: 20px; color: #e8ecff; line-height: 1.5; }
 
+/* ── турнирная сетка ── */
+.bracket-outer { overflow-x: auto; padding-bottom: 8px; }
+.bracket { display: flex; gap: 0; min-width: fit-content; align-items: flex-start; }
+.br-round { display: flex; flex-direction: column; min-width: 160px; max-width: 180px; }
+.br-round-label {
+  font-size: 10px; font-weight: 800; color: #52566e;
+  text-transform: uppercase; letter-spacing: .1em;
+  text-align: center; padding: 0 8px 10px;
+}
+.br-slots { display: flex; flex-direction: column; gap: 6px; }
+.br-slot  { display: flex; align-items: center; flex: 1; min-height: 58px; }
+.br-match {
+  flex: 1; background: #161720; border: 1px solid #272a3a;
+  border-radius: 10px; overflow: hidden; margin: 0 4px;
+  min-width: 0;
+}
+.br-fighter {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px; font-size: 12px; color: #9093ab;
+  border-bottom: 1px solid #1e2030; min-width: 0;
+}
+.br-fighter:last-child { border-bottom: none; }
+.br-fighter.win { background: #071a0f; color: #5ae090; font-weight: 600; }
+.br-fighter.tbd { color: #3d4058; font-style: italic; }
+.br-score { font-size: 12px; font-weight: 700; margin-left: 4px; flex-shrink: 0; }
+.br-score.win { color: #2ecc71; }
+.br-connector {
+  width: 16px; flex-shrink: 0;
+  height: 1px; background: #272a3a;
+}
+.br-winner-card {
+  background: #161720; border: 1px solid #c0392b33;
+  border-radius: 12px; padding: 14px 10px;
+  text-align: center; margin: 0 4px;
+  box-shadow: 0 0 20px rgba(192,57,43,.1);
+}
+.br-gold { font-size: 22px; margin-bottom: 6px; }
+.br-winner-flag { font-size: 18px; margin-bottom: 4px; }
+.br-winner-name { font-size: 13px; font-weight: 700; color: #f0f4ff; line-height: 1.3; }
+.br-winner-cnt  { font-size: 11px; color: #606480; margin-top: 3px; }
+
+/* ── утешительная сетка ── */
+.rep-section { margin-top: 24px; }
+.rep-title {
+  font-size: 12px; font-weight: 800; color: #b8860b;
+  text-transform: uppercase; letter-spacing: .1em;
+  padding: 10px 0 12px;
+  border-top: 1px solid #2a2200;
+  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.br-bronze-card {
+  background: #161720; border: 1px solid #b8860b33;
+  border-radius: 12px; padding: 14px 10px;
+  text-align: center; margin: 0 4px;
+}
+.br-bronze-medal { font-size: 22px; margin-bottom: 6px; }
+
 /* пантеон */
 .gold-t { width: 100%; border-collapse: collapse; }
 .gold-t th { font-size: 11px; color: #606480; text-transform: uppercase; letter-spacing:.1em; padding: 8px 14px; border-bottom: 1px solid #272a3a; text-align: left; }
@@ -519,128 +570,8 @@ df = load_data()
 # df передаётся как snapshot через замыкание.
 # bot_started хранится в session_state — НЕ перезапускаем при rerun.
 # ─────────────────────────────────────────────────────────────────────────────
-if "bot_started" not in st.session_state:
-    st.session_state.bot_started = False
-
-if BOT_TOKEN and TELEBOT_OK and df is not None and not st.session_state.bot_started:
-
-    _snapshot = df.copy()  # snapshot данных для потока
-
-    def _run_bot(token, data):
-        RMAP = {
-            'FIN':'Финал','FNL':'Финал','SFL':'1/2','QFL':'1/4',
-            'R16':'1/8','R32':'1/16','R64':'1/32','R128':'1/64',
-            'BR1':'Бронза','BR2':'Бронза','RP1':'Утешит.','RP2':'Утешит.',
-        }
-        FC = {'FIN','FNL'}
-
-        def _ci(v, d=0):
-            try: return int(float(v)) if pd.notna(v) else d
-            except: return d
-
-        try:
-            bot = telebot.TeleBot(token, threaded=False)
-        except Exception as e:
-            print(f"BOT init error: {e}"); return
-
-        @bot.message_handler(commands=['start','help'])
-        def on_start(m):
-            try:
-                bot.send_message(m.chat.id,
-                    "🥋 FIGHTGURU\n\n"
-                    "Введите фамилию атлета латиницей.\n"
-                    "Точный поиск: фамилия и имя через пробел.\n"
-                    "Пример: Zinnatov или Kurzhev Ali"
-                )
-            except: pass
-
-        @bot.message_handler(func=lambda m: True)
-        def on_msg(m):
-            try:
-                raw   = m.text.strip()
-                parts = raw.lower().split()
-                if not parts or len(parts[0]) < 2:
-                    bot.reply_to(m, "Введите фамилию (минимум 2 символа)."); return
-
-                last_q  = parts[0]
-                first_q = parts[1] if len(parts) >= 2 else None
-
-                mask = (
-                    data['red_last_name'].str.lower().str.contains(last_q, na=False) |
-                    data['blue_last_name'].str.lower().str.contains(last_q, na=False)
-                )
-                res = data[mask].copy()
-
-                if first_q:
-                    res = res[
-                        res['red_first_name'].str.lower().str.startswith(first_q, na=False) |
-                        res['blue_first_name'].str.lower().str.startswith(first_q, na=False)
-                    ]
-
-                if res.empty:
-                    bot.reply_to(m, f"Не найден: {raw}\nПроверьте написание."); return
-
-                r0 = res.iloc[0]
-                if last_q in str(r0.get('red_last_name','')).lower():
-                    aname = str(r0['red_full_name']).strip()
-                    acnt  = str(r0.get('red_nationality_code','')).upper()
-                else:
-                    aname = str(r0['blue_full_name']).strip()
-                    acnt  = str(r0.get('blue_nationality_code','')).upper()
-
-                wins=losses=finals_c=0
-                for _, row in res.iterrows():
-                    is_r = last_q in str(row.get('red_last_name','')).lower()
-                    wid  = str(row.get('winner_athlete_id',''))
-                    mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
-                    won  = (wid==mid and wid!='')
-                    if won: wins+=1
-                    else:   losses+=1
-                    if str(row.get('round_code','')).upper() in FC: finals_c+=1
-
-                total = wins+losses
-                wr = round(wins/total*100) if total else 0
-
-                recent = res.sort_values('date_start',ascending=False).head(5)
-                lines = ""
-                for _, row in recent.iterrows():
-                    yr   = int(row['date_start'].year) if pd.notna(row['date_start']) else "?"
-                    is_r = last_q in str(row.get('red_last_name','')).lower()
-                    wid  = str(row.get('winner_athlete_id',''))
-                    mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
-                    won  = (wid==mid and wid!='')
-                    msc  = _ci(row.get('red_score') if is_r else row.get('blue_score'))
-                    osc  = _ci(row.get('blue_score') if is_r else row.get('red_score'))
-                    opp  = str(row['blue_full_name'] if is_r else row['red_full_name']).strip()
-                    rc   = RMAP.get(str(row.get('round_code','')).upper(),'?')
-                    ico  = "✅" if won else "❌"
-                    lines += f"{ico} {yr} {rc} | {msc}:{osc} vs {opp[:18]}\n"
-
-                flag_e = FLAGS.get(acnt,"🌍")
-                cname  = COUNTRIES.get(acnt, acnt)
-                msg = (f"📊 {aname}\n{flag_e} {cname}\n\n"
-                       f"Боёв: {total} | ✅ {wins} | ❌ {losses} | {wr}%")
-                if finals_c: msg += f" | 🏆 {finals_c} фин."
-                msg += f"\n\nПоследние матчи:\n{lines}"
-
-                bot.send_message(m.chat.id, msg)
-            except Exception as ex:
-                print(f"BOT on_msg error: {ex}")
-                try: bot.reply_to(m, "Ошибка при обработке запроса.")
-                except: pass
-
-        print(f"BOT polling start, token={token[:10]}...")
-        while True:
-            try:
-                bot.infinity_polling(timeout=25, long_polling_timeout=20)
-            except Exception as ex:
-                print(f"BOT polling error: {ex}, restarting in 5s...")
-                import time; time.sleep(5)
-
-    t = threading.Thread(target=_run_bot, args=(BOT_TOKEN, _snapshot), daemon=True)
-    t.start()
-    st.session_state.bot_started = True
-
+# Бот запущен отдельно на Railway — здесь ничего не нужно
+# ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
@@ -655,7 +586,7 @@ for k,v in [('sq',''),('prev_sq',''),('filter','Все'),('sel',None),
 with st.sidebar:
     st.markdown("### 🥋 FightGuru")
     st.markdown("---")
-    nav = st.radio("nav", ["👤 Досье","🏛️ Пантеон"], label_visibility="collapsed")
+    nav = st.radio("nav", ["👤 Досье","🏛️ Пантеон","🏆 Турнир"], label_visibility="collapsed")
     st.markdown("---")
     if nav == "👤 Досье":
         cam_val = st.toggle("📹 Режим камеры", value=st.session_state.cam)
@@ -663,13 +594,8 @@ with st.sidebar:
             st.session_state.cam = cam_val
             st.rerun()
     st.markdown("---")
-    status_parts = []
-    if BOT_TOKEN and st.session_state.bot_started:
-        status_parts.append("🤖 Бот активен")
     if df is not None:
-        status_parts.append(f"📊 {len(df):,} матчей")
-    for s in status_parts:
-        st.markdown(f"<small style='color:#52566e'>{s}</small>", unsafe_allow_html=True)
+        st.markdown(f"<small style='color:#52566e'>📊 {len(df):,} матчей</small>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GUARD
@@ -677,6 +603,193 @@ with st.sidebar:
 if df is None:
     st.error(f"Файл '{DB_FILE}' не найден."); st.stop()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ТУРНИР — турнирная сетка
+# ─────────────────────────────────────────────────────────────────────────────
+if nav == "🏆 Турнир":
+    st.markdown("<h2 style='color:#f0f4ff;margin-bottom:16px'>🏆 Турнирная сетка</h2>",
+                unsafe_allow_html=True)
+
+    MAIN_ROUNDS   = ['R128','R64','R32','R16','QFL','SFL','FNL','FIN']
+    REP_ROUNDS    = ['RP1','RP2']
+    BRONZE_ROUNDS = ['BR1','BR2']
+    ROUND_LABELS  = {
+        'R128':'1/64','R64':'1/32','R32':'1/16','R16':'1/8',
+        'QFL':'1/4','SFL':'1/2','FNL':'Финал','FIN':'Финал',
+        'RP1':'Утешит. 1','RP2':'Утешит. 2',
+        'BR1':'За бронзу','BR2':'За бронзу',
+    }
+
+    # Список турниров — свежие первые
+    tour_df   = df[['tournament_name','date_start']].dropna().drop_duplicates('tournament_name')
+    tour_df   = tour_df.sort_values('date_start', ascending=False)
+    tour_list = tour_df['tournament_name'].tolist()
+    sel_tour  = st.selectbox("Турнир", tour_list)
+
+    td = df[df['tournament_name']==sel_tour].copy()
+    if td.empty:
+        st.warning("Нет данных."); st.stop()
+
+    cats      = sorted(td['category_code'].unique())
+    sel_cat   = st.selectbox("Категория", cats, format_func=lambda c: get_cat(c))
+    cd        = td[td['category_code']==sel_cat].copy()
+
+    if cd.empty:
+        st.warning("Нет матчей."); st.stop()
+
+    def get_rnd(rc):
+        return cd[cd['round_code'].str.upper()==rc].copy()
+
+    def fighter_html(name, cnt, score, is_win, tbd=False):
+        if tbd:
+            return '<div class="br-fighter tbd"><span>—</span><span style="margin-left:6px;flex:1">TBD</span></div>'
+        cls   = "win" if is_win else ""
+        sc_cls= "win" if is_win else ""
+        parts = name.strip().split()
+        short = (parts[0][0]+". "+" ".join(parts[1:])) if len(parts)>=2 else name.strip()
+        return (f'<div class="br-fighter {cls}">' +
+                f'<span style="font-size:12px">{fl(cnt)}</span>' +
+                f'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{short}</span>' +
+                f'<span class="br-score {sc_cls}">{score}</span>' +
+                f'</div>')
+
+    def match_card_html(m):
+        wid = str(m.get('winner_athlete_id',''))
+        rid = str(m.get('red_id','')); bid = str(m.get('blue_id',''))
+        rw  = (wid==rid and wid!='')
+        bw  = (wid==bid and wid!='')
+        rn  = str(m.get('red_full_name','')).strip()
+        bn  = str(m.get('blue_full_name','')).strip()
+        rc_ = str(m.get('red_nationality_code','')).upper()
+        bc_ = str(m.get('blue_nationality_code','')).upper()
+        rs  = ci(m.get('red_score',0)); bs = ci(m.get('blue_score',0))
+        return ('<div class="br-match">' +
+                fighter_html(rn,rc_,rs,rw) +
+                fighter_html(bn,bc_,bs,bw) +
+                '</div>')
+
+    def winner_of(matches):
+        """Возвращает (full_name, last_name, nationality_code) победителя."""
+        if matches.empty: return None,None,None
+        m   = matches.iloc[0]
+        wid = str(m.get('winner_athlete_id',''))
+        if wid == str(m.get('red_id','')):
+            return str(m.get('red_full_name','')).strip(), str(m.get('red_last_name','')).strip(), str(m.get('red_nationality_code','')).upper()
+        return str(m.get('blue_full_name','')).strip(), str(m.get('blue_last_name','')).strip(), str(m.get('blue_nationality_code','')).upper()
+
+    # ── Определяем присутствующие раунды ────────────────────────────────────
+    all_rc        = set(cd['round_code'].str.upper().unique())
+    main_present  = [r for r in MAIN_ROUNDS  if r in all_rc]
+    rep_present   = [r for r in REP_ROUNDS   if r in all_rc]
+    brnz_present  = [r for r in BRONZE_ROUNDS if r in all_rc]
+
+    # ════════════════════════════════════════════
+    # ОСНОВНАЯ СЕТКА
+    # ════════════════════════════════════════════
+    html = '<div class="bracket-outer"><div class="bracket">'
+
+    for i, rc in enumerate(main_present):
+        ms    = get_rnd(rc)
+        label = ROUND_LABELS.get(rc, rc)
+        is_last = (i == len(main_present)-1)
+        html += f'<div class="br-round"><div class="br-round-label">{label}</div><div class="br-slots">'
+        for _, m in ms.iterrows():
+            html += '<div class="br-slot">'
+            html += match_card_html(m)
+            if not is_last:
+                html += '<div class="br-connector"></div>'
+            html += '</div>'
+        html += '</div></div>'
+
+    # Колонка победителя
+    final_ms = get_rnd(main_present[-1]) if main_present else pd.DataFrame()
+    wname,wlast,wcnt = winner_of(final_ms)
+    if wname:
+        html += ('<div class="br-round"><div class="br-round-label">Победитель</div>' +
+                 '<div class="br-slots"><div class="br-slot"><div class="br-winner-card">' +
+                 f'<div class="br-gold">🥇</div>' +
+                 f'<div class="br-winner-flag">{fl(wcnt)}</div>' +
+                 f'<div class="br-winner-name">{wname}</div>' +
+                 f'<div class="br-winner-cnt">{cn(wcnt)}</div>' +
+                 '</div></div></div></div>')
+
+    html += '</div></div>'  # закрываем основную сетку
+
+    # ════════════════════════════════════════════
+    # УТЕШИТЕЛЬНАЯ СЕТКА (repechage)
+    # ════════════════════════════════════════════
+    if rep_present or brnz_present:
+        html += '<div class="rep-section">'
+        html += '<div class="rep-title">🥉 Утешительная сетка (Repechage)</div>'
+        html += '<div class="bracket-outer"><div class="bracket">'
+
+        all_rep = rep_present + brnz_present
+        for i, rc in enumerate(all_rep):
+            ms    = get_rnd(rc)
+            label = ROUND_LABELS.get(rc, rc)
+            is_last = (i == len(all_rep)-1)
+            html += f'<div class="br-round"><div class="br-round-label">{label}</div><div class="br-slots">'
+            for _, m in ms.iterrows():
+                html += '<div class="br-slot">'
+                html += match_card_html(m)
+                if not is_last:
+                    html += '<div class="br-connector"></div>'
+                html += '</div>'
+            html += '</div></div>'
+
+        # Бронзовые медалисты
+        bronze_winners_html = ""
+        for rc in brnz_present:
+            ms = get_rnd(rc)
+            bn,bl,bc = winner_of(ms)
+            if bn:
+                bronze_winners_html += (
+                    '<div class="br-slot"><div class="br-bronze-card">' +
+                    f'<div class="br-bronze-medal">🥉</div>' +
+                    f'<div class="br-winner-flag">{fl(bc)}</div>' +
+                    f'<div class="br-winner-name">{bn}</div>' +
+                    f'<div class="br-winner-cnt">{cn(bc)}</div>' +
+                    '</div></div>'
+                )
+
+        if bronze_winners_html:
+            html += ('<div class="br-round"><div class="br-round-label">Бронза</div>' +
+                     f'<div class="br-slots">{bronze_winners_html}</div></div>')
+
+        html += '</div></div></div>'  # закрываем rep-section
+
+    st.markdown(html, unsafe_allow_html=True)
+
+    # Кнопки перехода в досье
+    st.markdown("")
+    cols = st.columns(2)
+    with cols[0]:
+        if wname and st.button(f"→ Досье чемпиона: {wname}", use_container_width=True):
+            st.session_state.sq      = wlast
+            st.session_state.prev_sq = ""
+            st.session_state.sel     = None
+            st.rerun()
+
+    # Кнопки для бронзовых
+    bronze_winners = []
+    for rc in brnz_present:
+        ms = get_rnd(rc)
+        bn,bl,bc = winner_of(ms)
+        if bn: bronze_winners.append((bn,bl))
+
+    for i,(bn,bl) in enumerate(bronze_winners):
+        with cols[i%2]:
+            if st.button(f"→ Досье: {bn}", key=f"br_btn_{i}", use_container_width=True):
+                st.session_state.sq      = bl
+                st.session_state.prev_sq = ""
+                st.session_state.sel     = None
+                st.rerun()
+
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ПАНТЕОН
+# ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 # ПАНТЕОН
 # ─────────────────────────────────────────────────────────────────────────────
