@@ -598,8 +598,8 @@ if df is None:
     st.error(f"Файл '{DB_FILE}' не найден."); st.stop()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ТУРНИР — SVG-сетка, правильные соединения через winner_athlete_id
-# Боевое самбо (CSM): без утешительной. Спортивное: два бронзовых призёра.
+# ТУРНИР — простая надёжная сетка
+# Алгоритм: фиксированные Y-позиции + линии по winner_id
 # ─────────────────────────────────────────────────────────────────────────────
 if nav == "🏆 Турнир":
     st.markdown("<h2 style='color:#f0f4ff;margin-bottom:16px'>🏆 Турнирная сетка</h2>",
@@ -628,10 +628,8 @@ if nav == "🏆 Турнир":
     if cd.empty:
         st.warning("Нет матчей."); st.stop()
 
-    # Боевое самбо = без утешительной сетки
     is_combat = 'CSM' in str(sel_cat).upper()
-
-    all_rc       = set(cd['round_code'].str.upper().unique())
+    all_rc    = set(cd['round_code'].str.upper().unique())
     main_present = [r for r in MAIN_ROUNDS   if r in all_rc]
     rep_present  = [] if is_combat else [r for r in REP_ROUNDS    if r in all_rc]
     brnz_present = [] if is_combat else [r for r in BRONZE_ROUNDS if r in all_rc]
@@ -639,209 +637,265 @@ if nav == "🏆 Турнир":
     def get_rnd(rc):
         return cd[cd['round_code'].str.upper() == rc].copy().reset_index(drop=True)
 
-    def shorten(name, maxlen=16):
+    def sid(m, col):
+        return str(m.get(col,'') or '')
+
+    def shorten(name, n=15):
         parts = str(name).strip().split()
-        s = (parts[0][0] + '. ' + ' '.join(parts[1:])) if len(parts) >= 2 else str(name).strip()
-        return s[:maxlen]
+        s = (parts[0][0]+'. '+' '.join(parts[1:])) if len(parts)>=2 else str(name).strip()
+        return s[:n]
 
-    def gid(m, col):
-        return str(m.get(col, '') or '')
-
-    def winner_of_ms(ms):
-        if ms is None or len(ms) == 0: return None, None, None
+    def winner_info(ms):
+        if ms is None or len(ms)==0: return None,None,None
         m   = ms.iloc[0]
-        wid = gid(m, 'winner_athlete_id')
-        if wid and wid == gid(m, 'red_id'):
-            return str(m.get('red_full_name','')).strip(), str(m.get('red_last_name','')).strip(), str(m.get('red_nationality_code','')).upper()
-        return str(m.get('blue_full_name','')).strip(), str(m.get('blue_last_name','')).strip(), str(m.get('blue_nationality_code','')).upper()
-
-    def find_next_idx(m_row, next_ms):
-        """Находит индекс матча в next_ms куда идёт победитель m_row."""
-        wid = gid(m_row, 'winner_athlete_id')
-        if not wid: return None
-        for i, (_, nm) in enumerate(next_ms.iterrows()):
-            if gid(nm, 'red_id') == wid or gid(nm, 'blue_id') == wid:
-                return i
-        return None
-
-    def sort_by_next(cur_ms, next_ms):
-        """Сортирует cur_ms чтобы матчи ведущие в next_ms[0] шли первыми."""
-        if next_ms is None or len(next_ms) == 0 or len(cur_ms) == 0: return cur_ms
-        order = [find_next_idx(m, next_ms) for _, m in cur_ms.iterrows()]
-        order = [x if x is not None else 999 for x in order]
-        cur_ms = cur_ms.copy()
-        cur_ms['_s'] = order
-        return cur_ms.sort_values('_s').drop(columns='_s').reset_index(drop=True)
-
-    # SVG параметры
-    CW=158; CH=46; HGAP=28; VGAP=10; PAD_T=28; PAD_L=8; WIN_W=140
+        wid = sid(m,'winner_athlete_id')
+        side = 'red' if (wid and wid==sid(m,'red_id')) else 'blue'
+        return (str(m.get(f'{side}_full_name','')).strip(),
+                str(m.get(f'{side}_last_name','')).strip(),
+                str(m.get(f'{side}_nationality_code','')).upper())
 
     def build_svg(rounds_list, is_rep=False):
-        if not rounds_list: return '<svg width="10" height="10"></svg>'
+        """
+        Простой и надёжный подход:
+        - Каждый матч занимает фиксированную высоту SLOT_H
+        - Матчи в каждом раунде расположены равномерно
+        - Линии рисуются по winner_id: находим матч победителя в следующем раунде
+        - Y-середина этого матча = куда идёт линия
+        """
+        if not rounds_list:
+            return '<svg width="10" height="10"></svg>'
 
-        rnd_ms = [get_rnd(rc) for rc in rounds_list]
+        # Загружаем матчи
+        rnd_data = [(rc, get_rnd(rc)) for rc in rounds_list]
 
-        # Сортируем раунды справа налево
-        for i in range(len(rnd_ms)-2, -1, -1):
-            rnd_ms[i] = sort_by_next(rnd_ms[i], rnd_ms[i+1])
+        # Убираем пустые раунды
+        rnd_data = [(rc, ms) for rc, ms in rnd_data if len(ms) > 0]
+        if not rnd_data:
+            return '<svg width="10" height="10"></svg>'
 
-        n_rounds = len(rounds_list)
-        max_n    = max(len(ms) for ms in rnd_ms)
-        slot_h   = CH + VGAP
-        total_h  = max(max_n * slot_h - VGAP, CH)
-        svg_h    = PAD_T + total_h + 30
-        svg_w    = PAD_L + n_rounds * (CW + HGAP) + WIN_W
+        n_rounds = len(rnd_data)
+        max_n    = max(len(ms) for _, ms in rnd_data)
 
-        # Вычисляем Y-центры матчей
-        def base_centers(n):
+        # SVG параметры
+        CW     = 160   # ширина карточки
+        CH     = 48    # высота карточки
+        HGAP   = 30    # зазор между раундами
+        SLOT_H = 60    # высота слота (карточка + отступ)
+        PAD_T  = 30    # отступ сверху (заголовок раунда)
+        PAD_L  = 6     # отступ слева
+        WIN_W  = 150   # ширина колонки победителя
+
+        svg_h = PAD_T + max_n * SLOT_H + 20
+        svg_w = PAD_L + n_rounds * (CW + HGAP) + WIN_W
+
+        # Вычисляем Y-центр каждого матча
+        # Все раунды имеют одинаковую суммарную высоту — матчи центрируются
+        def get_centers(n):
+            total = max_n * SLOT_H
             if n == 0: return []
-            if n == 1: return [PAD_T + total_h // 2]
-            step = total_h / (n - 1)
-            return [PAD_T + int(i * step) for i in range(n)]
+            if n == 1: return [PAD_T + total // 2]
+            step = total / n
+            return [PAD_T + int(step * i + step / 2) for i in range(n)]
 
-        rnd_centers = [None] * n_rounds
-        rnd_centers[-1] = base_centers(len(rnd_ms[-1]))
-
-        # Для каждого предыдущего раунда — центр = среднее центров пары в следующем
-        for i in range(n_rounds-2, -1, -1):
-            cur_ms  = rnd_ms[i]
-            nxt_cen = rnd_centers[i+1]
-            nxt_ms  = rnd_ms[i+1]
-            centers = []
-            # Группируем матчи cur по next_idx
-            groups = {}
-            for j, (_, m) in enumerate(cur_ms.iterrows()):
-                ni = find_next_idx(m, nxt_ms)
-                key = ni if ni is not None else 999
-                groups.setdefault(key, []).append(j)
-
-            pos = [None] * len(cur_ms)
-            for ni_key, idxs in sorted(groups.items()):
-                if ni_key < len(nxt_cen):
-                    base = nxt_cen[ni_key]
-                else:
-                    base = PAD_T + ni_key * slot_h
-                n_in_group = len(idxs)
-                for rank, j in enumerate(idxs):
-                    if n_in_group == 1:
-                        pos[j] = base
-                    else:
-                        half = (n_in_group-1) * slot_h / 2
-                        pos[j] = int(base - half + rank * slot_h)
-            rnd_centers[i] = [p if p is not None else PAD_T + j*slot_h for j,p in enumerate(pos)]
+        # Строим словарь: red_id/blue_id → (col_i, match_i, cy)
+        # для быстрого поиска следующего матча победителя
+        athlete_to_match = {}  # athlete_id -> (col_i, cy)
+        col_centers = []
+        for col_i, (rc, ms) in enumerate(rnd_data):
+            centers = get_centers(len(ms))
+            col_centers.append(centers)
+            for mi, (_, m) in enumerate(ms.iterrows()):
+                cy = centers[mi]
+                for side in ('red','blue'):
+                    aid = sid(m, f'{side}_id')
+                    if aid:
+                        athlete_to_match[aid] = (col_i, cy)
 
         svg = []
-        svg.append(f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" ')
-        svg.append('xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">')
+        svg.append(f'<svg width="{svg_w}" height="{svg_h}" '
+                   f'viewBox="0 0 {svg_w} {svg_h}" '
+                   f'xmlns="http://www.w3.org/2000/svg" '
+                   f'style="display:block;overflow:visible">')
 
-        # Соединительные линии
-        for col_i in range(n_rounds-1):
-            x_cur   = PAD_L + col_i * (CW + HGAP)
-            x_next  = PAD_L + (col_i+1) * (CW + HGAP)
-            x_mid   = x_cur + CW + HGAP // 2
-            cur_ms  = rnd_ms[col_i]
-            nxt_ms  = rnd_ms[col_i+1]
-            cur_cen = rnd_centers[col_i]
-            nxt_cen = rnd_centers[col_i+1]
+        # ── Соединительные линии (рисуем ДО карточек чтобы карточки были поверх) ──
+        for col_i, (rc, ms) in enumerate(rnd_data):
+            if col_i >= n_rounds - 1: continue
+            x_right = PAD_L + col_i * (CW + HGAP) + CW
+            x_next  = PAD_L + (col_i + 1) * (CW + HGAP)
+            x_mid   = x_right + HGAP // 2
+            centers = col_centers[col_i]
 
-            for j, (_, m) in enumerate(cur_ms.iterrows()):
-                if j >= len(cur_cen): continue
-                cy_c = cur_cen[j]
-                ni   = find_next_idx(m, nxt_ms)
-                if ni is None or ni >= len(nxt_cen): continue
-                cy_n = nxt_cen[ni]
-                svg.append(f'<polyline points="{x_cur+CW},{cy_c} {x_mid},{cy_c} {x_mid},{cy_n} {x_next},{cy_n}" ')
-                svg.append('fill="none" stroke="#3a3d52" stroke-width="1.5"/>')
+            for mi, (_, m) in enumerate(ms.iterrows()):
+                if mi >= len(centers): continue
+                cy_cur = centers[mi]
 
-        # Карточки матчей
-        for col_i, (rc, ms) in enumerate(zip(rounds_list, rnd_ms)):
-            x   = PAD_L + col_i * (CW + HGAP)
-            cen = rnd_centers[col_i]
-            lbl = ROUND_LABELS.get(rc, rc)
-            svg.append(f'<text x="{x+CW//2}" y="16" text-anchor="middle" ')
-            svg.append(f'style="font-size:10px;font-weight:800;fill:#52566e;font-family:sans-serif">{lbl}</text>')
+                # Находим следующий матч победителя
+                wid = sid(m, 'winner_athlete_id')
+                if not wid: continue
 
-            for j, (_, m) in enumerate(ms.iterrows()):
-                if j >= len(cen): continue
-                cy = cen[j]; my = cy - CH//2
-                wid= gid(m,'winner_athlete_id'); rid=gid(m,'red_id'); bid=gid(m,'blue_id')
-                rw = (wid==rid and wid!=''); bw = (wid==bid and wid!= '')
-                rn = shorten(str(m.get('red_full_name',''))); bn = shorten(str(m.get('blue_full_name','')))
-                rc_= str(m.get('red_nationality_code','')).upper(); bc_=str(m.get('blue_nationality_code','')).upper()
-                rs = ci(m.get('red_score',0)); bs_v = ci(m.get('blue_score',0))
+                # Ищем в следующем раунде
+                next_rc, next_ms = rnd_data[col_i + 1]
+                cy_next = None
+                for nmi, (_, nm) in enumerate(next_ms.iterrows()):
+                    if sid(nm,'red_id')==wid or sid(nm,'blue_id')==wid:
+                        if nmi < len(col_centers[col_i+1]):
+                            cy_next = col_centers[col_i+1][nmi]
+                        break
 
-                svg.append(f'<rect x="{x}" y="{my}" width="{CW}" height="{CH}" rx="8" fill="#161720" stroke="#272a3a" stroke-width="1"/>')
-                svg.append(f'<line x1="{x}" y1="{my+CH//2}" x2="{x+CW}" y2="{my+CH//2}" stroke="#1e2030" stroke-width="1"/>')
-                if rw: svg.append(f'<rect x="{x+1}" y="{my+1}" width="{CW-2}" height="{CH//2-1}" rx="7" fill="#071a0f"/>')
-                if bw: svg.append(f'<rect x="{x+1}" y="{my+CH//2}" width="{CW-2}" height="{CH//2-1}" rx="0" fill="#071a0f"/>')
+                if cy_next is None: continue
 
-                rf='#5ae090' if rw else '#9093ab'; rsf='#2ecc71' if rw else '#3d4058'; rfw='700' if rw else '400'
-                bf='#5ae090' if bw else '#9093ab'; bsf='#2ecc71' if bw else '#3d4058'; bfw='700' if bw else '400'
+                # Рисуем Г-образную линию: горизонталь → вертикаль → горизонталь
+                svg.append(
+                    f'<polyline points="{x_right},{cy_cur} {x_mid},{cy_cur} '
+                    f'{x_mid},{cy_next} {x_next},{cy_next}" '
+                    f'fill="none" stroke="#3a3d52" stroke-width="1.5" stroke-linejoin="round"/>'
+                )
 
-                svg.append(f'<text x="{x+6}" y="{my+15}" style="font-size:11px;fill:{rf};font-weight:{rfw};font-family:sans-serif">{fl(rc_)} {rn}</text>')
-                svg.append(f'<text x="{x+CW-5}" y="{my+15}" text-anchor="end" style="font-size:12px;font-weight:700;fill:{rsf};font-family:sans-serif">{rs}</text>')
-                svg.append(f'<text x="{x+6}" y="{my+CH-5}" style="font-size:11px;fill:{bf};font-weight:{bfw};font-family:sans-serif">{fl(bc_)} {bn}</text>')
-                svg.append(f'<text x="{x+CW-5}" y="{my+CH-5}" text-anchor="end" style="font-size:12px;font-weight:700;fill:{bsf};font-family:sans-serif">{bs_v}</text>')
+        # ── Карточки матчей ────────────────────────────────────────────────────
+        for col_i, (rc, ms) in enumerate(rnd_data):
+            x       = PAD_L + col_i * (CW + HGAP)
+            centers = col_centers[col_i]
+            label   = ROUND_LABELS.get(rc, rc)
 
-        # Победитель
-        last_ms = rnd_ms[-1]; last_cen = rnd_centers[-1]
-        wname, wlast, wcnt = winner_of_ms(last_ms)
-        if wname and last_cen:
-            wx  = PAD_L + n_rounds*(CW+HGAP) - HGAP + 6
-            cy  = last_cen[0]
+            # Заголовок раунда
+            svg.append(
+                f'<text x="{x + CW//2}" y="18" text-anchor="middle" '
+                f'style="font-size:10px;font-weight:800;fill:#52566e;'
+                f'font-family:sans-serif;text-transform:uppercase;letter-spacing:.1em">'
+                f'{label}</text>'
+            )
+
+            for mi, (_, m) in enumerate(ms.iterrows()):
+                if mi >= len(centers): continue
+                cy = centers[mi]
+                my = cy - CH // 2  # верхний край карточки
+
+                wid = sid(m,'winner_athlete_id')
+                rid = sid(m,'red_id')
+                bid = sid(m,'blue_id')
+                rw  = (wid==rid and wid!='')
+                bw  = (wid==bid and wid!='')
+
+                rn  = shorten(str(m.get('red_full_name','')))
+                bn  = shorten(str(m.get('blue_full_name','')))
+                rc_ = str(m.get('red_nationality_code','')).upper()
+                bc_ = str(m.get('blue_nationality_code','')).upper()
+                rs  = ci(m.get('red_score',0))
+                bs  = ci(m.get('blue_score',0))
+
+                # Фон карточки
+                svg.append(f'<rect x="{x}" y="{my}" width="{CW}" height="{CH}" '
+                           f'rx="8" fill="#161720" stroke="#272a3a" stroke-width="1"/>')
+                # Разделитель
+                svg.append(f'<line x1="{x}" y1="{my+CH//2}" x2="{x+CW}" y2="{my+CH//2}" '
+                           f'stroke="#1e2030" stroke-width="1"/>')
+                # Зелёный фон победителя
+                if rw:
+                    svg.append(f'<rect x="{x+1}" y="{my+1}" width="{CW-2}" height="{CH//2-1}" '
+                               f'rx="7" fill="#071a0f"/>')
+                if bw:
+                    svg.append(f'<rect x="{x+1}" y="{my+CH//2}" width="{CW-2}" height="{CH//2-1}" '
+                               f'fill="#071a0f"/>')
+
+                # Текст красного
+                rf  = '#5ae090' if rw else '#9093ab'
+                rfw = '700'     if rw else '400'
+                rsf = '#2ecc71' if rw else '#3d4058'
+                svg.append(f'<text x="{x+6}" y="{my+16}" '
+                           f'style="font-size:11px;fill:{rf};font-weight:{rfw};font-family:sans-serif">'
+                           f'{fl(rc_)} {rn}</text>')
+                svg.append(f'<text x="{x+CW-5}" y="{my+16}" text-anchor="end" '
+                           f'style="font-size:12px;font-weight:700;fill:{rsf};font-family:sans-serif">'
+                           f'{rs}</text>')
+
+                # Текст синего
+                bf  = '#5ae090' if bw else '#9093ab'
+                bfw = '700'     if bw else '400'
+                bsf = '#2ecc71' if bw else '#3d4058'
+                svg.append(f'<text x="{x+6}" y="{my+CH-5}" '
+                           f'style="font-size:11px;fill:{bf};font-weight:{bfw};font-family:sans-serif">'
+                           f'{fl(bc_)} {bn}</text>')
+                svg.append(f'<text x="{x+CW-5}" y="{my+CH-5}" text-anchor="end" '
+                           f'style="font-size:12px;font-weight:700;fill:{bsf};font-family:sans-serif">'
+                           f'{bs}</text>')
+
+        # ── Победитель ────────────────────────────────────────────────────────
+        last_rc, last_ms = rnd_data[-1]
+        wname, wlast, wcnt = winner_info(last_ms)
+        if wname and col_centers[-1]:
+            wx  = PAD_L + n_rounds * (CW + HGAP) - HGAP + 8
+            cy  = col_centers[-1][0]
             med = '🥉' if is_rep else '🥇'
-            svg.append(f'<line x1="{PAD_L+(n_rounds-1)*(CW+HGAP)+CW}" y1="{cy}" x2="{wx}" y2="{cy}" stroke="#c0392b55" stroke-width="1.5"/>')
-            svg.append(f'<text x="{wx+4}" y="{cy-8}" style="font-size:20px;font-family:sans-serif">{med}</text>')
-            svg.append(f'<text x="{wx+4}" y="{cy+8}" style="font-size:12px;font-weight:700;fill:#f0f4ff;font-family:sans-serif">{wname[:18]}</text>')
-            svg.append(f'<text x="{wx+4}" y="{cy+22}" style="font-size:11px;fill:#52566e;font-family:sans-serif">{fl(wcnt)} {cn(wcnt)}</text>')
+            svg.append(f'<line x1="{PAD_L+(n_rounds-1)*(CW+HGAP)+CW}" y1="{cy}" '
+                      f'x2="{wx}" y2="{cy}" stroke="#c0392b55" stroke-width="1.5"/>')
+            svg.append(f'<text x="{wx+4}" y="{cy-8}" '
+                      f'style="font-size:20px;font-family:sans-serif">{med}</text>')
+            svg.append(f'<text x="{wx+4}" y="{cy+8}" '
+                      f'style="font-size:12px;font-weight:700;fill:#f0f4ff;font-family:sans-serif">'
+                      f'{wname[:20]}</text>')
+            svg.append(f'<text x="{wx+4}" y="{cy+22}" '
+                      f'style="font-size:11px;fill:#52566e;font-family:sans-serif">'
+                      f'{fl(wcnt)} {cn(wcnt)}</text>')
 
         svg.append('</svg>')
         return ''.join(svg)
 
-    # Рендер основной сетки
+    # ── РЕНДЕР ────────────────────────────────────────────────────────────────
     if main_present:
-        st.markdown("<p style='font-size:10px;font-weight:800;color:#52566e;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px'>Основная сетка</p>", unsafe_allow_html=True)
-        st.markdown(f'<div style="overflow-x:auto;padding-bottom:8px">{build_svg(main_present)}</div>', unsafe_allow_html=True)
+        st.markdown("<p style='font-size:10px;font-weight:800;color:#52566e;"
+                    "text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px'>"
+                    "Основная сетка</p>", unsafe_allow_html=True)
+        st.markdown(f'<div style="overflow-x:auto;padding-bottom:8px">'
+                    f'{build_svg(main_present)}</div>', unsafe_allow_html=True)
 
-    # Утешительная — только спортивное самбо
     if not is_combat and (rep_present or brnz_present):
-        st.markdown("<p style='font-size:10px;font-weight:800;color:#b8860b;text-transform:uppercase;letter-spacing:.1em;margin-top:22px;margin-bottom:6px;padding-top:14px;border-top:1px solid #2a2200'>🥉 Утешительная сетка (Repechage)</p>", unsafe_allow_html=True)
-        st.markdown(f'<div style="overflow-x:auto;padding-bottom:8px">{build_svg(rep_present + brnz_present, is_rep=True)}</div>', unsafe_allow_html=True)
+        st.markdown("<p style='font-size:10px;font-weight:800;color:#b8860b;"
+                    "text-transform:uppercase;letter-spacing:.1em;margin-top:22px;"
+                    "margin-bottom:6px;padding-top:14px;border-top:1px solid #2a2200'>"
+                    "🥉 Утешительная сетка (Repechage)</p>", unsafe_allow_html=True)
+        st.markdown(f'<div style="overflow-x:auto;padding-bottom:8px">'
+                    f'{build_svg(rep_present + brnz_present, is_rep=True)}</div>',
+                    unsafe_allow_html=True)
 
-        # Два бронзовых призёра отдельными карточками
-        bronze_html = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
+        # Два бронзовых призёра
+        b_html = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
         for rc in brnz_present:
             ms = get_rnd(rc)
-            bn, bl, bc = winner_of_ms(ms)
+            bn, bl, bc = winner_info(ms)
             if bn:
-                bronze_html += (f'<div style="background:#161720;border:1px solid #b8860b33;border-radius:12px;padding:12px 16px;min-width:140px">' +
-                                f'<div style="font-size:20px;margin-bottom:6px">🥉</div>' +
-                                f'<div style="font-size:13px;font-weight:700;color:#f0f4ff">{bn}</div>' +
-                                f'<div style="font-size:12px;color:#52566e;margin-top:3px">{fl(bc)} {cn(bc)}</div></div>')
-        bronze_html += '</div>'
-        st.markdown(bronze_html, unsafe_allow_html=True)
+                b_html += (f'<div style="background:#161720;border:1px solid #b8860b33;'
+                           f'border-radius:12px;padding:12px 16px;min-width:140px">'
+                           f'<div style="font-size:20px;margin-bottom:6px">🥉</div>'
+                           f'<div style="font-size:13px;font-weight:700;color:#f0f4ff">{bn}</div>'
+                           f'<div style="font-size:12px;color:#52566e;margin-top:3px">'
+                           f'{fl(bc)} {cn(bc)}</div></div>')
+        b_html += '</div>'
+        st.markdown(b_html, unsafe_allow_html=True)
 
-    # Кнопки перехода в досье
+    # Кнопки в досье
     st.markdown("")
     final_ms = get_rnd(main_present[-1]) if main_present else None
-    wname, wlast, wcnt = winner_of_ms(final_ms)
-    nav_cols = st.columns(2)
-    with nav_cols[0]:
+    wname, wlast, wcnt = winner_info(final_ms)
+    nav_c = st.columns(2)
+    with nav_c[0]:
         if wname and st.button(f"-> Досье чемпиона: {wname}", use_container_width=True):
-            st.session_state.sq = wlast; st.session_state.prev_sq = ""; st.session_state.sel = None; st.rerun()
+            st.session_state.sq=""; st.session_state.sq=wlast
+            st.session_state.prev_sq=""; st.session_state.sel=None; st.rerun()
 
     if not is_combat:
         bi = 0
         for rc in brnz_present:
             ms = get_rnd(rc)
-            bn, bl, bc = winner_of_ms(ms)
+            bn, bl, bc = winner_info(ms)
             if bn:
-                with nav_cols[bi % 2]:
+                with nav_c[bi % 2]:
                     if st.button(f"-> Досье: {bn}", key=f"br_{bi}", use_container_width=True):
-                        st.session_state.sq = bl; st.session_state.prev_sq = ""; st.session_state.sel = None; st.rerun()
+                        st.session_state.sq=bl; st.session_state.prev_sq=""
+                        st.session_state.sel=None; st.rerun()
                 bi += 1
 
     st.stop()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ПАНТЕОН
