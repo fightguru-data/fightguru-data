@@ -725,6 +725,7 @@ start_bot_if_needed()
 # ─────────────────────────────────────────────────────────────────────────────
 SS_DEFAULTS = {
     'sq':          '',      # текущий поисковый запрос
+    '_sq_widget':  '',      # зеркало виджета
     'filter':      'Все',   # активный фильтр матчей
     'sel':         None,    # выбранный атлет (при неоднозначности)
     'prev_sq':     '',      # предыдущий запрос — для детекции смены
@@ -816,19 +817,29 @@ if nav == "🏛️ Пантеон":
 # ВАЖНО: используем key='sq' — Streamlit сам читает из session_state['sq']
 # и пишет туда при вводе. НЕ используем value= — это вызывает сброс при rerun.
 # ─────────────────────────────────────────────────────────────────────────────
+# text_input БЕЗ key= — иначе нельзя писать в session_state.sq из кода.
+# Используем value= + сохраняем вручную через on_change.
+def _on_search_change():
+    st.session_state.sq      = st.session_state._sq_widget
+    st.session_state.sel     = None
+    st.session_state.filter  = "Все"
+    st.session_state.prev_sq = st.session_state._sq_widget
+
 st.text_input(
     "",
-    key="sq",
+    value=st.session_state.sq,
+    key="_sq_widget",
     placeholder="🔍  Фамилия атлета — или «Фамилия Имя» для точного поиска",
     label_visibility="collapsed",
+    on_change=_on_search_change,
 )
 sq = st.session_state.sq.strip()
 
-# Сброс выбора и фильтра только при смене запроса (не при rerun от фильтров)
+# Сброс при смене запроса (на случай прямой установки session_state.sq из кода)
 if sq != st.session_state.prev_sq:
-    st.session_state.sel      = None
-    st.session_state.filter   = 'Все'
-    st.session_state.prev_sq  = sq
+    st.session_state.sel     = None
+    st.session_state.filter  = "Все"
+    st.session_state.prev_sq = sq
 
 if not sq:
     st.markdown(
@@ -1182,9 +1193,9 @@ with tab_m:
 
         if st.button(f"→ Досье: {opp_full}", key=f"ob_{row.name}"):
             st.session_state.sq      = opp_last
-            st.session_state.prev_sq = opp_last
+            st.session_state.prev_sq = ""   # сбросим чтобы детект сработал
             st.session_state.sel     = None
-            st.session_state.filter  = 'Все'
+            st.session_state.filter  = "Все"
             st.rerun()
 
         shown += 1
