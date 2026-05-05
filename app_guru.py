@@ -598,7 +598,7 @@ if df is None:
     st.error(f"Файл '{DB_FILE}' не найден."); st.stop()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ТУРНИР — SVG-сетка с настоящими соединительными линиями
+# ТУРНИР — SVG-сетка с правильными соединениями по winner_athlete_id
 # ─────────────────────────────────────────────────────────────────────────────
 if nav == "🏆 Турнир":
     st.markdown("<h2 style='color:#f0f4ff;margin-bottom:16px'>🏆 Турнирная сетка</h2>",
@@ -614,7 +614,7 @@ if nav == "🏆 Турнир":
         'BR1':'За бронзу','BR2':'За бронзу',
     }
 
-    # Выбор турнира
+    # ── Выбор турнира и категории ────────────────────────────────────────────
     tour_df   = df[['tournament_name','date_start']].dropna().drop_duplicates('tournament_name')
     tour_list = tour_df.sort_values('date_start', ascending=False)['tournament_name'].tolist()
     sel_tour  = st.selectbox("Турнир", tour_list)
@@ -623,11 +623,15 @@ if nav == "🏆 Турнир":
     if td.empty:
         st.warning("Нет данных."); st.stop()
 
-    cats     = sorted(td['category_code'].unique())
-    sel_cat  = st.selectbox("Категория", cats, format_func=lambda c: get_cat(c))
-    cd       = td[td['category_code'] == sel_cat].copy()
+    cats    = sorted(td['category_code'].unique())
+    sel_cat = st.selectbox("Категория", cats, format_func=lambda c: get_cat(c))
+    cd      = td[td['category_code'] == sel_cat].copy()
     if cd.empty:
         st.warning("Нет матчей."); st.stop()
+
+    # Нормализуем id-поля
+    for col in ['winner_athlete_id','red_id','blue_id']:
+        cd[col] = cd[col].astype(str).str.strip()
 
     all_rc       = set(cd['round_code'].str.upper().unique())
     main_present = [r for r in MAIN_ROUNDS   if r in all_rc]
@@ -635,13 +639,13 @@ if nav == "🏆 Турнир":
     brnz_present = [r for r in BRONZE_ROUNDS if r in all_rc]
 
     def get_rnd(rc):
-        return cd[cd['round_code'].str.upper() == rc].copy()
+        return cd[cd['round_code'].str.upper() == rc].copy().reset_index(drop=True)
 
     def winner_of(ms):
-        if ms.empty: return None, None, None
+        if ms is None or len(ms) == 0: return None, None, None
         m   = ms.iloc[0]
-        wid = str(m.get('winner_athlete_id', ''))
-        if wid == str(m.get('red_id', '')):
+        wid = str(m.get('winner_athlete_id',''))
+        if wid == str(m.get('red_id','')):
             return (str(m.get('red_full_name','')).strip(),
                     str(m.get('red_last_name','')).strip(),
                     str(m.get('red_nationality_code','')).upper())
@@ -652,180 +656,274 @@ if nav == "🏆 Турнир":
     def shorten(name):
         parts = name.strip().split()
         if len(parts) >= 2:
-            return parts[0][0] + ". " + " ".join(parts[1:])
-        return name.strip()
+            return (parts[0][0] + ". " + " ".join(parts[1:]))[:20]
+        return name.strip()[:20]
 
-    # ─── Параметры SVG ────────────────────────────────────────────────────────
-    CW   = 155   # ширина карточки матча
-    CH   = 44    # высота карточки матча
-    GAP  = 30    # горизонтальный зазор между раундами
-    PAD  = 20    # отступ сверху/снизу
-    LBL  = 20    # высота подписи раунда
+    # ── SVG-параметры ────────────────────────────────────────────────────────
+    CW  = 158   # ширина карточки
+    CH  = 46    # высота карточки (2 строки)
+    COL_GAP = 36   # зазор между колонками
+    PAD_X   = 12
+    PAD_Y   = 30
+    LBL_H   = 22   # высота заголовка раунда
+    SLOT_H  = CH + 14  # слот = карточка + отступ
 
-    def build_svg(rounds_list, bronze_rounds=None, title=None, is_rep=False):
+    def build_svg_bracket(rounds_list, is_rep=False):
         """
-        Строит SVG турнирной сетки.
-        rounds_list: список round_code в порядке слева направо.
+        Строит SVG сетку.
+        Соединения строятся по winner_athlete_id:
+          для каждого матча в раунде N+1 ищем в раунде N матчи,
+          победитель которых стал red или blue этого матча.
         """
-        # собираем матчи по раундам
-        rnd_data = []
+        # Собираем данные по раундам
+        rnd_matches = []
         for rc in rounds_list:
             ms = get_rnd(rc)
-            rnd_data.append((rc, ms))
+            rnd_matches.append(ms)
 
-        if not rnd_data:
+        if not rnd_matches:
             return ""
 
-        n_rounds  = len(rnd_data)
-        max_match = max(len(ms) for _, ms in rnd_data) if rnd_data else 1
-        # высота SVG: достаточно для максимального числа матчей в любом раунде
-        slot_h    = CH + 12   # высота слота (карточка + зазор)
-        svg_h     = PAD + LBL + max_match * slot_h + PAD
+        n_cols = len(rnd_matches)
 
-        # ширина: N раундов + колонка победителей
-        svg_w = n_rounds * (CW + GAP) + 80
+        # Вычисляем Y-позиции матчей в каждой колонке
+        # Правило: в каждом следующем раунде вдвое меньше матчей,
+        # они выравниваются по центру пар из предыдущего раунда.
+        col_match_ys = []  # col_match_ys[col][match_idx] = center_y карточки
 
-        lines = []
-        lines.append(f'<svg width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}" '
-                      f'style="display:block;overflow:visible">')
+        # Первая колонка: равномерно
+        n0     = len(rnd_matches[0])
+        total0 = n0 * SLOT_H
+        start0 = PAD_Y + LBL_H
+        ys0    = [start0 + i * SLOT_H + CH // 2 for i in range(n0)]
+        col_match_ys.append(ys0)
 
-        # CSS внутри SVG
-        lines.append("""<style>
-.f-win{font-weight:700}
-</style>""")
+        # Последующие колонки: center между парами из предыдущей
+        for ci in range(1, n_cols):
+            prev_ys = col_match_ys[ci - 1]
+            cur_n   = len(rnd_matches[ci])
+            # строим связи: для каждого матча в cur ищем его "родителей" в prev
+            # по winner_athlete_id → red_id / blue_id
+            cur_ms   = rnd_matches[ci]
+            prev_ms  = rnd_matches[ci - 1]
 
-        col_x = []  # x левого края каждой колонки
+            # Словарь: winner_id → индекс матча в prev
+            prev_winner_to_idx = {}
+            for pi, prev_row in prev_ms.iterrows():
+                wid = str(prev_row.get('winner_athlete_id', ''))
+                if wid and wid != 'None':
+                    prev_winner_to_idx[wid] = pi
 
-        for col_i, (rc, ms) in enumerate(rnd_data):
-            x = PAD + col_i * (CW + GAP)
-            col_x.append(x)
-            label = ROUND_LABELS.get(rc, rc)
+            cur_ys = []
+            for mi, cur_row in cur_ms.iterrows():
+                rid = str(cur_row.get('red_id',  ''))
+                bid = str(cur_row.get('blue_id', ''))
+                # ищем родителей
+                parents = []
+                if rid in prev_winner_to_idx:
+                    parents.append(prev_winner_to_idx[rid])
+                if bid in prev_winner_to_idx:
+                    parents.append(prev_winner_to_idx[bid])
 
-            # заголовок раунда
-            lines.append(f'<text x="{x + CW//2}" y="{PAD + 13}" '
-                          f'text-anchor="middle" '
-                          f'style="font-size:10px;font-weight:800;fill:#52566e;'
-                          f'text-transform:uppercase;letter-spacing:.08em;font-family:sans-serif">'
-                          f'{label}</text>')
+                if parents:
+                    parent_ys = [prev_ys[p] for p in parents if p < len(prev_ys)]
+                    cy = sum(parent_ys) // len(parent_ys)
+                else:
+                    # fallback: равномерно
+                    cy = PAD_Y + LBL_H + mi * SLOT_H * 2 + CH // 2
+                cur_ys.append(cy)
+            col_match_ys.append(cur_ys)
 
-            n = len(ms)
-            if n == 0:
-                continue
+        # Полная высота SVG
+        max_cy   = max(y for ys in col_match_ys for y in ys) if col_match_ys else 100
+        svg_h    = max_cy + CH // 2 + PAD_Y
+        winner_col_w = 130
+        svg_w    = PAD_X + n_cols * (CW + COL_GAP) + winner_col_w
 
-            # Y-позиции центров матчей в этой колонке
-            total_h  = n * slot_h
-            start_y  = PAD + LBL + (svg_h - PAD - LBL - PAD - total_h) // 2
+        lines = [f'<svg width="{svg_w}" height="{svg_h}" '
+                 f'viewBox="0 0 {svg_w} {svg_h}" '
+                 f'style="display:block;overflow:visible;font-family:sans-serif">']
 
-            match_centers = []
+        # ── Рисуем колонки ────────────────────────────────────────────────────
+        col_xs = [PAD_X + ci * (CW + COL_GAP) for ci in range(n_cols)]
+
+        for ci, (rc, ms) in enumerate(zip(rounds_list, rnd_matches)):
+            x      = col_xs[ci]
+            label  = ROUND_LABELS.get(rc, rc)
+            ys     = col_match_ys[ci]
+
+            # заголовок
+            lines.append(
+                f'<text x="{x + CW//2}" y="{PAD_Y - 6}" text-anchor="middle" '
+                f'style="font-size:10px;font-weight:800;fill:#52566e;'
+                f'text-transform:uppercase;letter-spacing:.08em">{label}</text>'
+            )
+
             for mi, (_, m) in enumerate(ms.iterrows()):
-                my = start_y + mi * slot_h
-                cy = my + CH // 2
-                match_centers.append(cy)
+                cy = ys[mi]
+                my = cy - CH // 2
 
                 wid = str(m.get('winner_athlete_id', ''))
                 rid = str(m.get('red_id', ''))
                 bid = str(m.get('blue_id', ''))
-                rw  = (wid == rid and wid != '')
-                bw  = (wid == bid and wid != '')
+                rw  = (wid == rid and wid not in ('', 'None', 'nan'))
+                bw  = (wid == bid and wid not in ('', 'None', 'nan'))
 
                 rn  = shorten(str(m.get('red_full_name',  '')))
                 bn  = shorten(str(m.get('blue_full_name',  '')))
                 rc_ = str(m.get('red_nationality_code',  '')).upper()
                 bc_ = str(m.get('blue_nationality_code', '')).upper()
-                rs  = ci(m.get('red_score',  0))
-                bs  = ci(m.get('blue_score', 0))
+                rs  = ci_(m.get('red_score',  0))
+                bs  = ci_(m.get('blue_score', 0))
 
                 # фон карточки
-                bg_fill   = '#161720'
-                lines.append(f'<rect x="{x}" y="{my}" width="{CW}" height="{CH}" rx="8" '
-                              f'fill="{bg_fill}" stroke="#272a3a" stroke-width="1"/>')
+                lines.append(
+                    f'<rect x="{x}" y="{my}" width="{CW}" height="{CH}" rx="8" '
+                    f'fill="#161720" stroke="#272a3a" stroke-width="1"/>'
+                )
                 # разделитель
-                lines.append(f'<line x1="{x}" y1="{my+CH//2}" x2="{x+CW}" y2="{my+CH//2}" '
-                              f'stroke="#1e2030" stroke-width="1"/>')
+                lines.append(
+                    f'<line x1="{x+1}" y1="{my+CH//2}" x2="{x+CW-1}" y2="{my+CH//2}" '
+                    f'stroke="#1e2030" stroke-width="1"/>'
+                )
 
-                # строка красного
-                rn_fill  = '#5ae090' if rw else '#9093ab'
-                rs_fill  = '#2ecc71' if rw else '#3d4058'
-                rn_fw    = 'bold'    if rw else 'normal'
-                lines.append(f'<text x="{x+6}" y="{my+14}" '
-                              f'style="font-size:11px;fill:{rn_fill};font-weight:{rn_fw};font-family:sans-serif">'
-                              f'{fl(rc_)} {rn[:18]}</text>')
-                lines.append(f'<text x="{x+CW-6}" y="{my+14}" text-anchor="end" '
-                              f'style="font-size:12px;font-weight:bold;fill:{rs_fill};font-family:sans-serif">'
-                              f'{rs}</text>')
+                # красный боец
+                rf = '#5ae090' if rw else '#9093ab'
+                rs_f = '#2ecc71' if rw else '#3d4058'
+                lines.append(
+                    f'<text x="{x+7}" y="{my+15}" '
+                    f'style="font-size:11px;fill:{rf};'
+                    f'font-weight:{"bold" if rw else "normal"}">'
+                    f'{fl(rc_)} {rn}</text>'
+                )
+                lines.append(
+                    f'<text x="{x+CW-7}" y="{my+15}" text-anchor="end" '
+                    f'style="font-size:12px;font-weight:bold;fill:{rs_f}">{rs}</text>'
+                )
 
-                # строка синего
-                bn_fill  = '#5ae090' if bw else '#9093ab'
-                bs_fill  = '#2ecc71' if bw else '#3d4058'
-                bn_fw    = 'bold'    if bw else 'normal'
-                lines.append(f'<text x="{x+6}" y="{my+36}" '
-                              f'style="font-size:11px;fill:{bn_fill};font-weight:{bn_fw};font-family:sans-serif">'
-                              f'{fl(bc_)} {bn[:18]}</text>')
-                lines.append(f'<text x="{x+CW-6}" y="{my+36}" text-anchor="end" '
-                              f'style="font-size:12px;font-weight:bold;fill:{bs_fill};font-family:sans-serif">'
-                              f'{bs}</text>')
+                # синий боец
+                bf = '#5ae090' if bw else '#9093ab'
+                bs_f = '#2ecc71' if bw else '#3d4058'
+                lines.append(
+                    f'<text x="{x+7}" y="{my+37}" '
+                    f'style="font-size:11px;fill:{bf};'
+                    f'font-weight:{"bold" if bw else "normal"}">'
+                    f'{fl(bc_)} {bn}</text>'
+                )
+                lines.append(
+                    f'<text x="{x+CW-7}" y="{my+37}" text-anchor="end" '
+                    f'style="font-size:12px;font-weight:bold;fill:{bs_f}">{bs}</text>'
+                )
 
-            # сохраняем центры для соединений
-            rnd_data[col_i] = (rc, ms, match_centers, x)
+        # ── Соединительные линии ─────────────────────────────────────────────
+        for ci in range(n_cols - 1):
+            x_right = col_xs[ci] + CW   # правый край текущей колонки
+            x_left  = col_xs[ci + 1]    # левый край следующей колонки
+            x_mid   = x_right + COL_GAP // 2
 
-        # ─── Соединительные линии между раундами ──────────────────────────────
-        for col_i in range(len(rnd_data) - 1):
-            rc_l, ms_l, centers_l, x_l = rnd_data[col_i]
-            rc_r, ms_r, centers_r, x_r = rnd_data[col_i + 1]
+            cur_ms   = rnd_matches[ci]
+            next_ms  = rnd_matches[ci + 1]
+            cur_ys   = col_match_ys[ci]
+            next_ys  = col_match_ys[ci + 1]
 
-            x_mid_l = x_l + CW          # правый край левой колонки
-            x_mid_r = x_r               # левый край правой колонки
-            x_mid   = (x_mid_l + x_mid_r) // 2
+            # словарь winner_id → cy в текущем раунде
+            winner_cy = {}
+            for pi, (_, pm) in enumerate(cur_ms.iterrows()):
+                wid = str(pm.get('winner_athlete_id', ''))
+                if wid and wid not in ('', 'None', 'nan') and pi < len(cur_ys):
+                    winner_cy[wid] = cur_ys[pi]
 
-            n_l = len(centers_l)
-            n_r = len(centers_r)
+            # для каждого матча в следующем раунде рисуем ветки
+            for ni, (_, nm) in enumerate(next_ms.iterrows()):
+                if ni >= len(next_ys): continue
+                ny   = next_ys[ni]
+                rid  = str(nm.get('red_id',  ''))
+                bid  = str(nm.get('blue_id', ''))
 
-            # каждые 2 матча левого раунда объединяются в 1 матч правого
-            for ri in range(n_r):
-                cy_r = centers_r[ri]
-                # берём пару из левого раунда
-                i1 = ri * 2
-                i2 = ri * 2 + 1
-                if i1 < n_l:
-                    cy1 = centers_l[i1]
-                    # горизонталь от карточки до середины
-                    lines.append(f'<line x1="{x_mid_l}" y1="{cy1}" x2="{x_mid}" y2="{cy1}" '
-                                  f'stroke="#272a3a" stroke-width="1.5" fill="none"/>')
-                    if i2 < n_l:
-                        cy2 = centers_l[i2]
-                        lines.append(f'<line x1="{x_mid_l}" y1="{cy2}" x2="{x_mid}" y2="{cy2}" '
-                                      f'stroke="#272a3a" stroke-width="1.5" fill="none"/>')
-                        # вертикаль соединяющая их
-                        lines.append(f'<line x1="{x_mid}" y1="{cy1}" x2="{x_mid}" y2="{cy2}" '
-                                      f'stroke="#272a3a" stroke-width="1.5" fill="none"/>')
-                    # горизонталь к правой карточке
-                    mid_y = (cy1 + (centers_l[i2] if i2 < n_l else cy1)) // 2
-                    lines.append(f'<line x1="{x_mid}" y1="{mid_y}" x2="{x_mid_r}" y2="{cy_r}" '
-                                  f'stroke="#272a3a" stroke-width="1.5" fill="none"/>')
+                parent_cys = []
+                if rid in winner_cy: parent_cys.append(winner_cy[rid])
+                if bid in winner_cy: parent_cys.append(winner_cy[bid])
 
-        # ─── Колонка победителя (финал) ───────────────────────────────────────
-        if rnd_data:
-            last_rc, last_ms, last_centers, last_x = rnd_data[-1]
-            wname, wlast, wcnt = winner_of(last_ms)
-            if wname and last_centers:
-                cy   = last_centers[0]
-                wx   = last_x + CW + 10
-                # линия от финала к победителю
-                lines.append(f'<line x1="{last_x+CW}" y1="{cy}" x2="{wx+8}" y2="{cy}" '
-                              f'stroke="#c0392b55" stroke-width="1.5"/>')
-                lines.append(f'<text x="{wx+12}" y="{cy-8}" '
-                              f'style="font-size:18px;font-family:sans-serif">{"🥇" if not is_rep else "🥉"}</text>')
-                lines.append(f'<text x="{wx+12}" y="{cy+8}" '
-                              f'style="font-size:11px;font-weight:bold;fill:#f0f4ff;font-family:sans-serif">'
-                              f'{wname[:20]}</text>')
-                lines.append(f'<text x="{wx+12}" y="{cy+21}" '
-                              f'style="font-size:10px;fill:#52566e;font-family:sans-serif">'
-                              f'{fl(wcnt)} {cn(wcnt)}</text>')
+                if not parent_cys:
+                    # нет связи — просто горизонталь
+                    lines.append(
+                        f'<line x1="{x_right}" y1="{ny}" x2="{x_left}" y2="{ny}" '
+                        f'stroke="#272a3a" stroke-width="1.5"/>'
+                    )
+                    continue
+
+                for pcy in parent_cys:
+                    # горизонталь от карточки до средины
+                    lines.append(
+                        f'<line x1="{x_right}" y1="{pcy}" x2="{x_mid}" y2="{pcy}" '
+                        f'stroke="#272a3a" stroke-width="1.5"/>'
+                    )
+
+                # вертикаль соединяет родителей
+                if len(parent_cys) == 2:
+                    p1, p2 = min(parent_cys), max(parent_cys)
+                    lines.append(
+                        f'<line x1="{x_mid}" y1="{p1}" x2="{x_mid}" y2="{p2}" '
+                        f'stroke="#272a3a" stroke-width="1.5"/>'
+                    )
+                    mid_y = (p1 + p2) // 2
+                else:
+                    mid_y = parent_cys[0]
+
+                # горизонталь от середины к следующей карточке
+                lines.append(
+                    f'<line x1="{x_mid}" y1="{mid_y}" x2="{x_left}" y2="{ny}" '
+                    f'stroke="#272a3a" stroke-width="1.5"/>'
+                )
+
+        # ── Победитель / призёры ──────────────────────────────────────────────
+        last_ms = rnd_matches[-1]
+        last_ys = col_match_ys[-1]
+        x_last  = col_xs[-1] + CW + 10
+        medal   = "🥉" if is_rep else "🥇"
+
+        for mi, (_, m) in enumerate(last_ms.iterrows()):
+            if mi >= len(last_ys): continue
+            cy  = last_ys[mi]
+            wid = str(m.get('winner_athlete_id', ''))
+            if wid == str(m.get('red_id', '')):
+                wname = str(m.get('red_full_name', '')).strip()
+                wcnt  = str(m.get('red_nationality_code', '')).upper()
+            else:
+                wname = str(m.get('blue_full_name', '')).strip()
+                wcnt  = str(m.get('blue_nationality_code', '')).upper()
+
+            if not wname: continue
+
+            # линия
+            lines.append(
+                f'<line x1="{x_last-10}" y1="{cy}" x2="{x_last+4}" y2="{cy}" '
+                f'stroke="#c0392b55" stroke-width="1.5"/>'
+            )
+            lines.append(
+                f'<text x="{x_last+8}" y="{cy-10}" '
+                f'style="font-size:16px">{medal}</text>'
+            )
+            lines.append(
+                f'<text x="{x_last+8}" y="{cy+6}" '
+                f'style="font-size:11px;font-weight:bold;fill:#f0f4ff">'
+                f'{wname[:22]}</text>'
+            )
+            lines.append(
+                f'<text x="{x_last+8}" y="{cy+19}" '
+                f'style="font-size:10px;fill:#52566e">'
+                f'{fl(wcnt)} {cn(wcnt)}</text>'
+            )
 
         lines.append('</svg>')
         return '\n'.join(lines)
 
-    # ─── Рендер ───────────────────────────────────────────────────────────────
+    # ci_ — псевдоним чтобы не конфликтовать с переменной ci в цикле
+    def ci_(v, d=0):
+        try: return int(float(v)) if pd.notna(v) else d
+        except: return d
+
+    # ── Рендер основной сетки ────────────────────────────────────────────────
     if main_present:
         st.markdown(
             "<p style='font-size:11px;font-weight:800;color:#52566e;"
@@ -833,12 +931,13 @@ if nav == "🏆 Турнир":
             "Основная сетка</p>",
             unsafe_allow_html=True
         )
-        svg_main = build_svg(main_present)
+        svg_main = build_svg_bracket(main_present, is_rep=False)
         st.markdown(
             f'<div style="overflow-x:auto;padding-bottom:8px">{svg_main}</div>',
             unsafe_allow_html=True
         )
 
+    # ── Рендер утешительной сетки ────────────────────────────────────────────
     if rep_present or brnz_present:
         st.markdown(
             "<p style='font-size:11px;font-weight:800;color:#b8860b;"
@@ -848,38 +947,54 @@ if nav == "🏆 Турнир":
             "🥉 Утешительная сетка (Repechage)</p>",
             unsafe_allow_html=True
         )
-        svg_rep = build_svg(rep_present + brnz_present, is_rep=True)
+        # BR1 и BR2 — два отдельных бронзовых матча, оба в одной сетке
+        svg_rep = build_svg_bracket(rep_present + brnz_present, is_rep=True)
         st.markdown(
             f'<div style="overflow-x:auto;padding-bottom:8px">{svg_rep}</div>',
             unsafe_allow_html=True
         )
 
-    # Кнопки перехода в досье
+    # ── Кнопки перехода в досье ───────────────────────────────────────────────
     st.markdown("")
-    final_ms = get_rnd(main_present[-1]) if main_present else None
-    wname, wlast, wcnt = winner_of(final_ms) if final_ms is not None else (None,None,None)
-    cols = st.columns(2)
-    with cols[0]:
-        if wname and st.button(f"-> Досье чемпиона: {wname}", use_container_width=True):
-            st.session_state.sq      = wlast
-            st.session_state.prev_sq = ""
-            st.session_state.sel     = None
-            st.rerun()
+    cols_btn = st.columns(2)
 
-    bronze_winners = []
+    # Чемпион
+    if main_present:
+        final_ms = get_rnd(main_present[-1])
+        wname, wlast, _ = winner_of(final_ms)
+        if wname:
+            with cols_btn[0]:
+                if st.button(f"-> Досье чемпиона: {wname}", use_container_width=True):
+                    st.session_state.sq      = wlast
+                    st.session_state.prev_sq = ""
+                    st.session_state.sel     = None
+                    st.rerun()
+
+    # Оба бронзовых призёра (BR1 и BR2 — разные матчи)
+    bronze_idx = 1
     for rc in brnz_present:
         ms = get_rnd(rc)
-        bn, bl, bc = winner_of(ms)
-        if bn: bronze_winners.append((bn, bl))
-    for i, (bn, bl) in enumerate(bronze_winners):
-        with cols[i % 2]:
-            if st.button(f"-> Досье: {bn}", key=f"br_btn_{i}", use_container_width=True):
-                st.session_state.sq      = bl
-                st.session_state.prev_sq = ""
-                st.session_state.sel     = None
-                st.rerun()
+        # в каждом бронзовом матче один победитель
+        for _, m in ms.iterrows():
+            wid = str(m.get('winner_athlete_id', ''))
+            if wid == str(m.get('red_id', '')):
+                bn = str(m.get('red_full_name', '')).strip()
+                bl = str(m.get('red_last_name', '')).strip()
+            else:
+                bn = str(m.get('blue_full_name', '')).strip()
+                bl = str(m.get('blue_last_name', '')).strip()
+            if bn:
+                with cols_btn[bronze_idx % 2]:
+                    if st.button(f"-> Досье: {bn}", key=f"br_{rc}_{bronze_idx}",
+                                 use_container_width=True):
+                        st.session_state.sq      = bl
+                        st.session_state.prev_sq = ""
+                        st.session_state.sel     = None
+                        st.rerun()
+                bronze_idx += 1
 
     st.stop()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ПАНТЕОН
