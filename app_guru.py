@@ -23,7 +23,8 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 # КОНФИГ
 # ─────────────────────────────────────────────────────────────────────────────
-DB_FILE         = "AllTournament.csv"
+DB_FILE         = os.path.join(os.path.dirname(os.path.abspath(__file__)), "AllTournament.csv")
+BOT_LOG_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".bot_pid")
 INTERVIEWS_FILE = "interviews.json"
 
 try:
@@ -38,11 +39,14 @@ st.set_page_config(page_title="FightGuru", page_icon="🥋", layout="wide")
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 .stApp {
   background: #0c0d12 !important;
   color: #dde0ef;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 .main .block-container {
   padding: 1.2rem 1.4rem 3rem !important;
@@ -105,11 +109,11 @@ div[data-testid="stHorizontalBlock"] .stButton button {
   box-shadow: 0 6px 24px rgba(192,57,43,.35);
   letter-spacing: -1px;
 }
-.p-name { font-size: 23px; font-weight: 800; color: #edf0ff; line-height: 1.15; }
-.p-sub  { font-size: 13px; color: #5a5e78; margin-top: 6px; line-height: 1.7; }
+.p-name { font-size: 24px; font-weight: 800; color: #f0f4ff; line-height: 1.15; }
+.p-sub  { font-size: 14px; color: #8890b0; margin-top: 6px; line-height: 1.7; }
 .p-country {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 14px; color: #7a7e9a; margin-top: 6px;
+  font-size: 15px; color: #9da4c0; margin-top: 6px;
   font-weight: 500;
 }
 .streak-pill {
@@ -134,7 +138,7 @@ div[data-testid="stHorizontalBlock"] .stButton button {
   border-radius: 16px;
   padding: 16px 14px;
 }
-.sc-l { font-size: 10px; color: #3d4058; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 7px; }
+.sc-l { font-size: 11px; color: #666a88; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 7px; }
 .sc-v { font-size: 30px; font-weight: 900; line-height: 1; color: #edf0ff; }
 .sc-v.g { color: #2ecc71; }
 .sc-v.r { color: #e74c3c; }
@@ -143,21 +147,21 @@ div[data-testid="stHorizontalBlock"] .stButton button {
 /* ── фильтр-чипы ── */
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; position: relative; }
 .f-chip {
-  font-size: 13px; font-weight: 700;
+  font-size: 14px; font-weight: 700;
   padding: 8px 20px; border-radius: 10px;
-  border: 1.5px solid #272a3a;
-  background: #161720; color: #4a4e68;
+  border: 1.5px solid #30334a;
+  background: #1e2035; color: #7880a8;
   cursor: pointer; white-space: nowrap;
   user-select: none;
   position: relative;
   transition: color .15s, border-color .15s, background .15s;
 }
 .f-chip.on { background: #c0392b; color: #fff; border-color: #c0392b; }
-.f-chip:hover:not(.on) { border-color: #404360; color: #9093ab; }
+.f-chip:hover:not(.on) { border-color: #505470; color: #a0a4c0; }
 
 /* ── год ── */
 .yr-sep {
-  font-size: 11px; font-weight: 800; color: #2a2d3d;
+  font-size: 12px; font-weight: 800; color: #52566e;
   text-transform: uppercase; letter-spacing: .14em;
   padding: 18px 0 10px;
   border-bottom: 1px solid #1a1c28;
@@ -195,25 +199,25 @@ div[data-testid="stHorizontalBlock"] .stButton button {
 .bl.win  { color: #1a7a40; }
 .bl.loss { color: #7a1a1a; }
 
-.m-tour { font-size: 11px; color: #2a2d3d; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-tour { font-size: 12px; color: #606480; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-opp  {
-  font-size: 15px; font-weight: 700; color: #dde0ef;
+  font-size: 16px; font-weight: 700; color: #e8ecff;
   display: flex; align-items: center; gap: 7px; margin-bottom: 5px; flex-wrap: wrap;
 }
-.m-cnt  { font-size: 11px; color: #3d4058; font-weight: 500; }
+.m-cnt  { font-size: 12px; color: #7880a0; font-weight: 500; }
 .m-tags { display: flex; gap: 5px; flex-wrap: wrap; }
-.tag { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #1a1c28; color: #3d4058; border: 1px solid #272a3a; }
+.tag { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #1e2135; color: #6870a0; border: 1px solid #272a3a; }
 .tag.rnd { background: #1a0707; color: #c0392b; border-color: #3d1515; }
 .tag.pen { background: #1a1500; color: #b8860b; border-color: #3d3000; }
 
 .m-right { text-align: right; flex-shrink: 0; min-width: 68px; }
-.m-date { font-size: 11px; color: #2a2d3d; margin-bottom: 5px; }
-.m-time { font-size: 12px; color: #232538; }
+.m-date { font-size: 12px; color: #606480; margin-bottom: 5px; }
+.m-time { font-size: 12px; color: #505468; }
 
 /* ── досье соперника ── */
 .opp-link-btn {
   width: 100%; text-align: left;
-  font-size: 13px; color: #3d6080;
+  font-size: 14px; color: #6090b8;
   background: #111318; border: 1px solid #1e2130;
   border-radius: 0 0 14px 14px;
   padding: 8px 16px; margin-bottom: 14px;
@@ -233,20 +237,20 @@ div[data-testid="stHorizontalBlock"] .stButton button {
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 900; color: #c0392b;
 }
-.q-text { font-size: 16px; color: #bbbece; line-height: 1.6; }
+.q-text { font-size: 17px; color: #ced2e8; line-height: 1.6; }
 
 /* ── wiki ── */
 .wiki-box {
   background: #161720; border: 1px solid #272a3a;
   border-radius: 16px; padding: 20px 22px; margin-bottom: 14px;
 }
-.wiki-lbl  { font-size: 10px; color: #2a2d3d; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
-.wiki-text { font-size: 14px; color: #6b6e85; line-height: 1.75; }
+.wiki-lbl  { font-size: 11px; color: #606480; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+.wiki-text { font-size: 15px; color: #9095b5; line-height: 1.75; }
 .wiki-link { font-size: 13px; color: #4472a0; margin-top: 12px; display: block; }
 
 .ref-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .ref-a {
-  font-size: 13px; color: #4a5e78;
+  font-size: 14px; color: #7090b8;
   background: #161720; border: 1px solid #272a3a;
   border-radius: 10px; padding: 8px 16px;
   text-decoration: none;
@@ -263,8 +267,8 @@ div[data-testid="stHorizontalBlock"] .stButton button {
   margin-bottom: 18px;
   box-shadow: 0 0 60px rgba(192,57,43,.15);
 }
-.cam-name { font-size: 40px; font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 6px; }
-.cam-sub  { font-size: 16px; color: #3d4058; margin-bottom: 28px; }
+.cam-name { font-size: 38px; font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 6px; }
+.cam-sub  { font-size: 16px; color: #8890b0; margin-bottom: 28px; }
 .cam-stats { display: flex; justify-content: center; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; }
 .cam-s  { text-align: center; min-width: 65px; }
 .cam-n  { font-size: 48px; font-weight: 900; line-height: 1; }
@@ -272,15 +276,15 @@ div[data-testid="stHorizontalBlock"] .stButton button {
 .cam-n.r { color: #e74c3c; }
 .cam-n.w { color: #edf0ff; }
 .cam-n.y { color: #f1c40f; }
-.cam-sl { font-size: 11px; color: #2a2d3d; text-transform: uppercase; letter-spacing:.08em; margin-top:4px; }
+.cam-sl { font-size: 12px; color: #606480; text-transform: uppercase; letter-spacing:.08em; margin-top:4px; }
 .cam-q  { background: #161720; border: 1px solid #272a3a; border-radius: 14px; padding: 18px 22px; margin-bottom: 10px; text-align: left; }
-.cam-qn { font-size: 11px; color: #c0392b; font-weight: 800; margin-bottom: 7px; text-transform: uppercase; letter-spacing:.08em; }
-.cam-qt { font-size: 20px; color: #dde0ef; line-height: 1.5; }
+.cam-qn { font-size: 12px; color: #e05040; font-weight: 800; margin-bottom: 7px; text-transform: uppercase; letter-spacing:.08em; }
+.cam-qt { font-size: 20px; color: #e8ecff; line-height: 1.5; }
 
 /* ── пантеон ── */
 .gold-t { width: 100%; border-collapse: collapse; }
 .gold-t th { font-size: 10px; color: #2a2d3d; text-transform: uppercase; letter-spacing:.1em; padding: 8px 14px; border-bottom: 1px solid #272a3a; text-align: left; }
-.gold-t td { font-size: 14px; color: #9093ab; padding: 11px 14px; border-bottom: 1px solid #111318; }
+.gold-t td { font-size: 15px; color: #b0b4d0; padding: 11px 14px; border-bottom: 1px solid #111318; }
 .gold-t tr:hover td { background: #161720; }
 .gold-n { font-weight: 900; color: #f1c40f; }
 
@@ -561,7 +565,7 @@ df = load_data()
 # Используем Process вместо Thread — переживает st.rerun()
 # Запускается ровно один раз через файл-флаг
 # ─────────────────────────────────────────────────────────────────────────────
-BOT_PID_FILE = ".bot_pid"
+# BOT_LOG_FILE moved to top
 
 def _bot_worker(token, db_path):
     """Запускается в отдельном процессе. Читает CSV сам."""
@@ -690,7 +694,7 @@ def _bot_worker(token, db_path):
             bot.send_message(m.chat.id, msg.replace("*",""))
 
     # пишем PID чтобы не запускать повторно
-    with open(BOT_PID_FILE, "w") as f:
+    with open(BOT_LOG_FILE, "w") as f:
         f.write(str(os.getpid()))
 
     print(f"BOT started pid={os.getpid()}")
@@ -701,14 +705,14 @@ def start_bot_if_needed():
     if not BOT_TOKEN or not TELEBOT_OK or not os.path.exists(DB_FILE):
         return
     # проверяем: уже запущен?
-    if os.path.exists(BOT_PID_FILE):
+    if os.path.exists(BOT_LOG_FILE):
         try:
-            pid = int(open(BOT_PID_FILE).read().strip())
+            pid = int(open(BOT_LOG_FILE).read().strip())
             os.kill(pid, 0)   # проверка — если процесс жив, исключения нет
             return            # бот уже работает
         except (ProcessLookupError, ValueError, OSError):
             pass              # процесс мёртв — запустим заново
-    p = Process(target=_bot_worker, args=(BOT_TOKEN, DB_FILE), daemon=True)
+    p = Process(target=_bot_worker, args=(BOT_TOKEN, DB_FILE), daemon=False)
     p.start()
 
 start_bot_if_needed()
