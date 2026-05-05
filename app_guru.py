@@ -1,212 +1,383 @@
+"""
+FIGHTGURU v5
+Исправления:
+  - Фильтры: st.session_state хранит и запрос и фильтр, rerun не сбрасывает поле
+  - Бот: запускается через multiprocessing.Process (не Thread), переживает rerun
+  - Walrus: убран, поиск переписан чисто
+  - Флаги: полный список + название страны везде
+  - Дизайн: 2026, glassmorphism, streak, win-rate ring
+"""
+
 import streamlit as st
 import pandas as pd
-import os
-import json
-import random
-import threading
-import requests
+import os, json, random, requests, time
 from datetime import datetime
+from multiprocessing import Process
 
 try:
     import telebot
-    TELEBOT_AVAILABLE = True
+    TELEBOT_OK = True
 except ImportError:
-    TELEBOT_AVAILABLE = False
+    TELEBOT_OK = False
 
-# =============================================================================
-# ТОКЕН БОТА — .streamlit/secrets.toml:
-#   [telegram]
-#   bot_token = "ВАШ_ТОКЕН"
-# =============================================================================
-BOT_TOKEN = st.secrets.get("telegram", {}).get("bot_token", "")
-
-# =============================================================================
-# КОНФИГУРАЦИЯ
-# =============================================================================
-DATABASE_FILE  = "AllTournament.csv"
+# ─────────────────────────────────────────────────────────────────────────────
+# КОНФИГ
+# ─────────────────────────────────────────────────────────────────────────────
+DB_FILE         = "AllTournament.csv"
 INTERVIEWS_FILE = "interviews.json"
 
-st.set_page_config(page_title="FIGHTGURU", page_icon="🥋", layout="wide")
+try:
+    BOT_TOKEN = st.secrets["telegram"]["bot_token"]
+except Exception:
+    BOT_TOKEN = ""
 
-# =============================================================================
+st.set_page_config(page_title="FightGuru", page_icon="🥋", layout="wide")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CSS
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  .stApp { background-color: #13141a; color: #e8e8e8; }
-  .main .block-container { padding: 1.2rem 1rem 2rem; max-width: 900px; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* ── профиль ── */
-  .profile-card {
-    background: #1c1e28; border: 1px solid #2a2d3a; border-radius: 16px;
-    padding: 22px 24px; margin-bottom: 10px;
-    display: flex; align-items: center; gap: 20px;
-  }
-  .avatar {
-    width: 64px; height: 64px; border-radius: 50%; background: #c0392b;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px; font-weight: 700; color: #fff; flex-shrink: 0;
-  }
-  .profile-name { font-size: 24px; font-weight: 700; color: #f2f2f2; line-height: 1.15; }
-  .profile-sub  { font-size: 15px; color: #777; margin-top: 5px; }
+.stApp {
+  background: #0c0d12 !important;
+  color: #dde0ef;
+}
+.main .block-container {
+  padding: 1.2rem 1.4rem 3rem !important;
+  max-width: 880px !important;
+}
 
-  /* ── статы ── */
-  .stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 12px; }
-  .stat-card {
-    background: #1c1e28; border: 1px solid #2a2d3a; border-radius: 12px; padding: 14px 16px;
-  }
-  .stat-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing:.06em; margin-bottom:5px; }
-  .stat-val   { font-size: 30px; font-weight: 700; color: #f0f0f0; line-height:1; }
-  .stat-val.g { color: #2ecc71; }
-  .stat-val.r { color: #e74c3c; }
+/* поиск */
+div[data-testid="stTextInput"] input {
+  background: #161720 !important;
+  border: 1px solid #272a3a !important;
+  border-radius: 14px !important;
+  color: #dde0ef !important;
+  font-size: 16px !important;
+  padding: 12px 18px !important;
+  font-family: inherit !important;
+}
 
-  /* ── год-разделитель ── */
-  .year-sep {
-    font-size: 12px; color: #444; text-transform: uppercase; letter-spacing:.1em;
-    padding: 16px 0 8px; border-bottom: 1px solid #222531; margin-bottom: 10px;
-  }
+/* сайдбар */
+section[data-testid="stSidebar"] {
+  background: #09090e !important;
+  border-right: 1px solid #1a1c28 !important;
+}
+section[data-testid="stSidebar"] label { color: #9093ab !important; font-size: 15px !important; }
 
-  /* ── карточка матча ── */
-  .match-card {
-    background: #1c1e28; border: 1px solid #2a2d3a; border-radius: 13px;
-    padding: 16px 18px; margin-bottom: 8px;
-    display: grid; grid-template-columns: 64px 1fr auto;
-    gap: 0 16px; align-items: center;
-    border-left: 3px solid transparent;
-  }
-  .match-card.win  { border-left-color: #2ecc71; }
-  .match-card.loss { border-left-color: #e74c3c; }
+/* скрываем стандартные кнопки фильтров — показываем только наш HTML overlay */
+div[data-testid="stHorizontalBlock"] .stButton button {
+  opacity: 0 !important;
+  position: absolute !important;
+  width: 100% !important; height: 100% !important;
+  top: 0; left: 0;
+  cursor: pointer !important;
+  z-index: 10;
+}
 
-  .badge {
-    width: 58px; height: 58px; border-radius: 11px;
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 2px; flex-shrink: 0;
-  }
-  .badge.win  { background: #0d2b1a; }
-  .badge.loss { background: #2b0d0d; }
-  .bscore { font-size: 20px; font-weight: 700; line-height:1; }
-  .bscore.win  { color: #2ecc71; }
-  .bscore.loss { color: #e74c3c; }
-  .blabel { font-size: 10px; font-weight: 700; letter-spacing:.06em; }
-  .blabel.win  { color: #27ae60; }
-  .blabel.loss { color: #c0392b; }
+/* ── профиль ── */
+.profile-wrap {
+  background: linear-gradient(140deg,#171924 0%,#111318 100%);
+  border: 1px solid #272a3a;
+  border-radius: 22px;
+  padding: 24px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.profile-wrap::after {
+  content: '';
+  position: absolute; top: -80px; right: -80px;
+  width: 220px; height: 220px;
+  background: radial-gradient(circle, rgba(192,57,43,.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.avatar {
+  width: 66px; height: 66px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(145deg,#c0392b,#7b1717);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 900; color: #fff;
+  box-shadow: 0 6px 24px rgba(192,57,43,.35);
+  letter-spacing: -1px;
+}
+.p-name { font-size: 23px; font-weight: 800; color: #edf0ff; line-height: 1.15; }
+.p-sub  { font-size: 13px; color: #5a5e78; margin-top: 6px; line-height: 1.7; }
+.p-country {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 14px; color: #7a7e9a; margin-top: 6px;
+  font-weight: 500;
+}
+.streak-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700;
+  padding: 4px 12px; border-radius: 20px;
+  margin-top: 10px;
+}
+.sp-win  { background: #071a0f; color: #2ecc71; border: 1px solid #1a4a2a; }
+.sp-loss { background: #1a0707; color: #e74c3c; border: 1px solid #4a1515; }
 
-  .m-tourney  { font-size: 13px; color: #4a4d5e; margin-bottom:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .m-opponent { font-size: 17px; font-weight:600; color:#e8e8e8; display:flex; align-items:center; gap:9px; margin-bottom:6px; }
-  .m-tags     { display:flex; gap:6px; flex-wrap:wrap; }
-  .tag { font-size:12px; padding:3px 11px; border-radius:20px; background:#252831; color:#5a5d70; border:1px solid #2a2d3a; }
-  .tag.rnd { background:#2b0d0d; color:#c0392b; border-color:#4a1a1a; }
-  .tag.pen { background:#2b2200; color:#b8860b; border-color:#443300; }
+/* ── стат-карточки ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sc {
+  background: #161720;
+  border: 1px solid #272a3a;
+  border-radius: 16px;
+  padding: 16px 14px;
+}
+.sc-l { font-size: 10px; color: #3d4058; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 7px; }
+.sc-v { font-size: 30px; font-weight: 900; line-height: 1; color: #edf0ff; }
+.sc-v.g { color: #2ecc71; }
+.sc-v.r { color: #e74c3c; }
+.sc-v.y { color: #f1c40f; }
 
-  .m-right { text-align:right; flex-shrink:0; }
-  .m-date  { font-size:13px; color:#4a4d5e; margin-bottom:5px; }
-  .m-time  { font-size:13px; color:#5a5d70; }
+/* ── фильтр-чипы ── */
+.filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; position: relative; }
+.f-chip {
+  font-size: 13px; font-weight: 700;
+  padding: 8px 20px; border-radius: 10px;
+  border: 1.5px solid #272a3a;
+  background: #161720; color: #4a4e68;
+  cursor: pointer; white-space: nowrap;
+  user-select: none;
+  position: relative;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.f-chip.on { background: #c0392b; color: #fff; border-color: #c0392b; }
+.f-chip:hover:not(.on) { border-color: #404360; color: #9093ab; }
 
-  /* ── интервью ── */
-  .q-card {
-    background:#1c1e28; border:1px solid #2a2d3a; border-radius:12px;
-    padding:18px 20px; margin-bottom:10px;
-    display:flex; align-items:flex-start; gap:14px;
-  }
-  .q-num {
-    width:30px; height:30px; border-radius:50%;
-    background:#c0392b22; border:1px solid #c0392b55;
-    display:flex; align-items:center; justify-content:center;
-    font-size:14px; font-weight:700; color:#c0392b; flex-shrink:0; margin-top:2px;
-  }
-  .q-text { font-size:17px; color:#d8d8d8; line-height:1.5; }
+/* ── год ── */
+.yr-sep {
+  font-size: 11px; font-weight: 800; color: #2a2d3d;
+  text-transform: uppercase; letter-spacing: .14em;
+  padding: 18px 0 10px;
+  border-bottom: 1px solid #1a1c28;
+  margin-bottom: 10px;
+}
 
-  /* ── wikipedia ── */
-  .wiki-box {
-    background:#1c1e28; border:1px solid #2a2d3a; border-radius:12px;
-    padding:18px 20px; margin-bottom:12px;
-  }
-  .wiki-title { font-size:12px; color:#555; text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; }
-  .wiki-text  { font-size:15px; color:#999; line-height:1.65; }
-  .wiki-link  { font-size:13px; color:#4a7fa5; margin-top:8px; display:block; }
+/* ── матч ── */
+.mc {
+  background: #161720;
+  border: 1px solid #272a3a;
+  border-radius: 16px;
+  padding: 15px 16px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 0 14px;
+  align-items: center;
+  border-left: 3px solid #272a3a;
+}
+.mc:hover { background: #1a1c2a; border-color: #35384d; }
+.mc.win  { border-left-color: #2ecc71; }
+.mc.loss { border-left-color: #e74c3c; }
 
-  /* ── режим камеры ── */
-  .camera-card {
-    background:#0d0e13; border:2px solid #c0392b; border-radius:20px;
-    padding:36px 32px; text-align:center; margin-bottom:16px;
-  }
-  .cam-name    { font-size:42px; font-weight:800; color:#fff; line-height:1.1; margin-bottom:6px; }
-  .cam-sub     { font-size:20px; color:#888; margin-bottom:28px; }
-  .cam-scores  { display:flex; justify-content:center; gap:24px; margin-bottom:30px; }
-  .cam-stat    { text-align:center; }
-  .cam-num     { font-size:52px; font-weight:800; line-height:1; }
-  .cam-num.g   { color:#2ecc71; }
-  .cam-num.r   { color:#e74c3c; }
-  .cam-num.w   { color:#f0f0f0; }
-  .cam-slabel  { font-size:13px; color:#555; margin-top:4px; text-transform:uppercase; letter-spacing:.07em; }
-  .cam-q       { background:#1c1e28; border:1px solid #2a2d3a; border-radius:12px; padding:18px 22px; margin-bottom:10px; text-align:left; }
-  .cam-qnum    { font-size:13px; color:#c0392b; font-weight:700; margin-bottom:6px; }
-  .cam-qtext   { font-size:20px; color:#e0e0e0; line-height:1.4; }
+.badge {
+  width: 54px; height: 54px; border-radius: 13px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+}
+.badge.win  { background: #071a0f; }
+.badge.loss { background: #1a0707; }
+.bs { font-size: 18px; font-weight: 900; line-height: 1; }
+.bs.win  { color: #2ecc71; }
+.bs.loss { color: #e74c3c; }
+.bl { font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.bl.win  { color: #1a7a40; }
+.bl.loss { color: #7a1a1a; }
 
-  /* ── Пантеон ── */
-  .gold-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
-  .gold-table th { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:.06em; text-align:left; padding:7px 12px; border-bottom:1px solid #2a2d3a; }
-  .gold-table td { font-size:14px; color:#ccc; padding:10px 12px; border-bottom:1px solid #1a1c24; }
-  .gold-table tr:hover td { background:#1c1e28; }
-  .gold-num { font-weight:700; color:#f0d060; }
+.m-tour { font-size: 11px; color: #2a2d3d; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-opp  {
+  font-size: 15px; font-weight: 700; color: #dde0ef;
+  display: flex; align-items: center; gap: 7px; margin-bottom: 5px; flex-wrap: wrap;
+}
+.m-cnt  { font-size: 11px; color: #3d4058; font-weight: 500; }
+.m-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.tag { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #1a1c28; color: #3d4058; border: 1px solid #272a3a; }
+.tag.rnd { background: #1a0707; color: #c0392b; border-color: #3d1515; }
+.tag.pen { background: #1a1500; color: #b8860b; border-color: #3d3000; }
 
-  /* ── сайдбар ── */
-  section[data-testid="stSidebar"] { background-color:#17181f !important; border-right:1px solid #2a2d3a !important; }
-  div[data-testid="stSidebar"] .stRadio label { color:#aaa; font-size:15px; }
-  div[data-testid="stTextInput"] input { background:#1c1e28 !important; border:1px solid #2a2d3a !important; border-radius:10px !important; color:#e8e8e8 !important; font-size:15px !important; }
+.m-right { text-align: right; flex-shrink: 0; min-width: 68px; }
+.m-date { font-size: 11px; color: #2a2d3d; margin-bottom: 5px; }
+.m-time { font-size: 12px; color: #232538; }
+
+/* ── досье соперника ── */
+.opp-link-btn {
+  width: 100%; text-align: left;
+  font-size: 13px; color: #3d6080;
+  background: #111318; border: 1px solid #1e2130;
+  border-radius: 0 0 14px 14px;
+  padding: 8px 16px; margin-bottom: 14px;
+  cursor: pointer;
+}
+.opp-link-btn:hover { color: #5a90b8; border-color: #2a3a4d; }
+
+/* ── интервью ── */
+.q-card {
+  background: #161720; border: 1px solid #272a3a;
+  border-radius: 16px; padding: 18px 20px; margin-bottom: 10px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.q-num {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: #1a0707; border: 1px solid #4a1515;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900; color: #c0392b;
+}
+.q-text { font-size: 16px; color: #bbbece; line-height: 1.6; }
+
+/* ── wiki ── */
+.wiki-box {
+  background: #161720; border: 1px solid #272a3a;
+  border-radius: 16px; padding: 20px 22px; margin-bottom: 14px;
+}
+.wiki-lbl  { font-size: 10px; color: #2a2d3d; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+.wiki-text { font-size: 14px; color: #6b6e85; line-height: 1.75; }
+.wiki-link { font-size: 13px; color: #4472a0; margin-top: 12px; display: block; }
+
+.ref-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.ref-a {
+  font-size: 13px; color: #4a5e78;
+  background: #161720; border: 1px solid #272a3a;
+  border-radius: 10px; padding: 8px 16px;
+  text-decoration: none;
+}
+.ref-a:hover { border-color: #404360; color: #7a90ab; }
+
+/* ── камера ── */
+.cam-wrap {
+  background: #09090e;
+  border: 2px solid #c0392b;
+  border-radius: 24px;
+  padding: 36px 28px;
+  text-align: center;
+  margin-bottom: 18px;
+  box-shadow: 0 0 60px rgba(192,57,43,.15);
+}
+.cam-name { font-size: 40px; font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 6px; }
+.cam-sub  { font-size: 16px; color: #3d4058; margin-bottom: 28px; }
+.cam-stats { display: flex; justify-content: center; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; }
+.cam-s  { text-align: center; min-width: 65px; }
+.cam-n  { font-size: 48px; font-weight: 900; line-height: 1; }
+.cam-n.g { color: #2ecc71; }
+.cam-n.r { color: #e74c3c; }
+.cam-n.w { color: #edf0ff; }
+.cam-n.y { color: #f1c40f; }
+.cam-sl { font-size: 11px; color: #2a2d3d; text-transform: uppercase; letter-spacing:.08em; margin-top:4px; }
+.cam-q  { background: #161720; border: 1px solid #272a3a; border-radius: 14px; padding: 18px 22px; margin-bottom: 10px; text-align: left; }
+.cam-qn { font-size: 11px; color: #c0392b; font-weight: 800; margin-bottom: 7px; text-transform: uppercase; letter-spacing:.08em; }
+.cam-qt { font-size: 20px; color: #dde0ef; line-height: 1.5; }
+
+/* ── пантеон ── */
+.gold-t { width: 100%; border-collapse: collapse; }
+.gold-t th { font-size: 10px; color: #2a2d3d; text-transform: uppercase; letter-spacing:.1em; padding: 8px 14px; border-bottom: 1px solid #272a3a; text-align: left; }
+.gold-t td { font-size: 14px; color: #9093ab; padding: 11px 14px; border-bottom: 1px solid #111318; }
+.gold-t tr:hover td { background: #161720; }
+.gold-n { font-weight: 900; color: #f1c40f; }
+
+/* скрываем служебное */
+#MainMenu, footer { visibility: hidden; }
+div[data-testid="stDecoration"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
-# =============================================================================
-# КОНСТАНТЫ
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# СПРАВОЧНИКИ
+# ─────────────────────────────────────────────────────────────────────────────
 ROUND_MAP = {
-    'FIN': (7,'Финал'), 'FNL': (7,'Финал'),
-    'SFL': (6,'1/2'),   'QFL': (5,'1/4'),
-    'R16': (4,'1/8'),   'R32': (3,'1/16'),
-    'R64': (2,'1/32'),  'R128':(1,'1/64'),
+    'FIN':(7,'Финал'),    'FNL':(7,'Финал'),
+    'SFL':(6,'1/2'),      'QFL':(5,'1/4'),
+    'R16':(4,'1/8'),      'R32':(3,'1/16'),
+    'R64':(2,'1/32'),     'R128':(1,'1/64'),
+    'BR1':(1,'Бронза'),   'BR2':(1,'Бронза'),
+    'RP1':(1,'Утешит.'),  'RP2':(1,'Утешит.'),
 }
 FINALS_CODES = {'FIN','FNL'}
 
-FLAG_EMOJIS = {
+FLAGS = {
     "RUS":"🇷🇺","BLR":"🇧🇾","KAZ":"🇰🇿","UZB":"🇺🇿","KGZ":"🇰🇬","MGL":"🇲🇳",
     "GEO":"🇬🇪","ARM":"🇦🇲","AZE":"🇦🇿","TJK":"🇹🇯","TKM":"🇹🇲","AIN":"🏳️",
     "FRA":"🇫🇷","SRB":"🇷🇸","USA":"🇺🇸","UKR":"🇺🇦","BUL":"🇧🇬","CRO":"🇭🇷",
     "MKD":"🇲🇰","ROU":"🇷🇴","ITA":"🇮🇹","TUR":"🇹🇷","LAT":"🇱🇻","ISR":"🇮🇱",
     "GBR":"🇬🇧","GER":"🇩🇪","NED":"🇳🇱","GRE":"🇬🇷","LTU":"🇱🇹","MDA":"🇲🇩",
-    "SVK":"🇸🇰","CZE":"🇨🇿","HUN":"🇭🇺","POL":"🇵🇱","SWE":"🇸🇪","FIN":"🇫🇮",
-    "ESP":"🇪🇸","POR":"🇵🇹","JPN":"🇯🇵","KOR":"🇰🇷","CHN":"🇨🇳","MNG":"🇲🇳",
+    "SVK":"🇸🇰","CZE":"🇨🇿","HUN":"🇭🇺","POL":"🇵🇱","SWE":"🇸🇪","ESP":"🇪🇸",
+    "POR":"🇵🇹","JPN":"🇯🇵","KOR":"🇰🇷","CHN":"🇨🇳","BEL":"🇧🇪","AUT":"🇦🇹",
+    "SUI":"🇨🇭","NOR":"🇳🇴","DEN":"🇩🇰","FIN":"🇫🇮","EST":"🇪🇪","LVA":"🇱🇻",
+    "IRN":"🇮🇷","IND":"🇮🇳","MAS":"🇲🇾","THA":"🇹🇭","PHI":"🇵🇭","BRA":"🇧🇷",
+    "ARG":"🇦🇷","MEX":"🇲🇽","CAN":"🇨🇦","AUS":"🇦🇺","MAR":"🇲🇦","EGY":"🇪🇬",
+    "ALB":"🇦🇱","BIH":"🇧🇦","MNE":"🇲🇪","KOS":"🇽🇰","SLO":"🇸🇮","CYP":"🇨🇾",
+    "MON":"🇲🇨","AND":"🇦🇩","ISL":"🇮🇸","IRL":"🇮🇪","RSA":"🇿🇦","KEN":"🇰🇪",
+    "ETH":"🇪🇹","SEN":"🇸🇳","NGR":"🇳🇬","CMR":"🇨🇲","KWT":"🇰🇼","VIE":"🇻🇳",
+    "COL":"🇨🇴","VEN":"🇻🇪","NZL":"🇳🇿","PAK":"🇵🇰","AFG":"🇦🇫","TUN":"🇹🇳",
+    "ALG":"🇩🇿","SGP":"🇸🇬","HKG":"🇭🇰","TPE":"🇹🇼","LUX":"🇱🇺","MLT":"🇲🇹",
 }
 
-COUNTRY_NAMES_RU = {
-    "RUS":"Россия","BLR":"Беларусь","KAZ":"Казахстан","UZB":"Узбекистан",
-    "KGZ":"Кыргызстан","TKM":"Туркменистан","MGL":"Монголия","GEO":"Грузия",
-    "ARM":"Армения","AZE":"Азербайджан","TJK":"Таджикистан","UKR":"Украина",
-    "SRB":"Сербия","FRA":"Франция","AIN":"Нейтральный атлет","TUR":"Турция",
-    "BUL":"Болгария","CRO":"Хорватия","GBR":"Великобритания","GER":"Германия",
-    "NED":"Нидерланды","GRE":"Греция","LTU":"Литва","MDA":"Молдова",
-    "LAT":"Латвия","ISR":"Израиль","ITA":"Италия","ROU":"Румыния",
+COUNTRIES = {
+    "RUS":"Россия",         "BLR":"Беларусь",       "KAZ":"Казахстан",
+    "UZB":"Узбекистан",     "KGZ":"Кыргызстан",     "TKM":"Туркменистан",
+    "MGL":"Монголия",       "GEO":"Грузия",          "ARM":"Армения",
+    "AZE":"Азербайджан",    "TJK":"Таджикистан",     "UKR":"Украина",
+    "SRB":"Сербия",         "FRA":"Франция",          "AIN":"Нейтр. атлет",
+    "TUR":"Турция",         "BUL":"Болгария",         "CRO":"Хорватия",
+    "GBR":"Великобр.",      "GER":"Германия",         "NED":"Нидерланды",
+    "GRE":"Греция",         "LTU":"Литва",            "MDA":"Молдова",
+    "LAT":"Латвия",         "ISR":"Израиль",          "ITA":"Италия",
+    "ROU":"Румыния",        "SVK":"Словакия",         "CZE":"Чехия",
+    "HUN":"Венгрия",        "POL":"Польша",           "SWE":"Швеция",
+    "ESP":"Испания",        "POR":"Португалия",       "JPN":"Япония",
+    "KOR":"Корея",          "CHN":"Китай",            "MKD":"Сев. Македония",
+    "BEL":"Бельгия",        "AUT":"Австрия",          "SUI":"Швейцария",
+    "NOR":"Норвегия",       "DEN":"Дания",            "FIN":"Финляндия",
+    "EST":"Эстония",        "IRN":"Иран",             "IND":"Индия",
+    "MAS":"Малайзия",       "THA":"Таиланд",          "BRA":"Бразилия",
+    "ARG":"Аргентина",      "MEX":"Мексика",          "CAN":"Канада",
+    "AUS":"Австралия",      "MAR":"Марокко",          "EGY":"Египет",
+    "ALB":"Албания",        "BIH":"Босния",           "MNE":"Черногория",
+    "KOS":"Косово",         "SLO":"Словения",         "ISL":"Исландия",
+    "IRL":"Ирландия",       "RSA":"ЮАР",              "KEN":"Кения",
+    "SEN":"Сенегал",        "NGR":"Нигерия",          "KWT":"Кувейт",
+    "VIE":"Вьетнам",        "COL":"Колумбия",         "VEN":"Венесуэла",
+    "NZL":"Новая Зел.",     "PAK":"Пакистан",         "TUN":"Тунис",
+    "ALG":"Алжир",          "PHI":"Филиппины",        "CYP":"Кипр",
+    "MON":"Монако",         "LUX":"Люксембург",       "USA":"США",
 }
 
-TOURNAMENT_GROUPS = {
+TOUR_GROUPS = {
     "Чемпионат Мира":    ["World Sambo Championships","World SAMBO Championships"],
     "Кубок Мира":        ["Cup","President"],
     "Чемпионат Европы":  ["European Sambo Championships","European Championships"],
     "ЧМ Азии и Океании": ["Asia and Oceania Sambo Championships"],
 }
-
 DIVISIONS = {
     "Спортивное Самбо (М)":"SAMM","Спортивное Самбо (Ж)":"SAMW",
     "Боевое Самбо (М)":"CSMM",   "Боевое Самбо (Ж)":"CSMW",
 }
 
-# =============================================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# УТИЛИТЫ
+# ─────────────────────────────────────────────────────────────────────────────
+def fl(code):
+    return FLAGS.get(str(code).upper().strip(), "🌍")
 
-def format_time(val) -> str:
+def cn(code):
+    c = str(code).upper().strip()
+    return COUNTRIES.get(c, c)
+
+def fl_cn(code):
+    return f"{fl(code)} {cn(code)}"
+
+def fmt_time(v):
     try:
-        s = str(val).strip()
+        s = str(v).strip()
         if ':' in s: return s
         ms = int(float(s))
         if ms == 0: return "—"
@@ -214,151 +385,135 @@ def format_time(val) -> str:
         return f"{ts//60}:{ts%60:02d}"
     except: return "—"
 
-def get_flag(code:str) -> str:
-    return FLAG_EMOJIS.get(str(code).upper().strip(), "🌍")
-
-def get_country(code:str) -> str:
-    return COUNTRY_NAMES_RU.get(str(code).upper().strip(), str(code))
-
-def get_cat(code:str) -> str:
+def get_cat(code):
     c = str(code).upper().strip()
-    p = "Спорт" if "SAM" in c else ("Боевое" if "CSM" in c else "")
-    g = "М" if ("SAMM" in c or "CSMM" in c) else ("Ж" if ("SAMW" in c or "CSMW" in c) else "")
+    if "CSM" in c:   p = "Боевое"
+    elif "SAM" in c: p = "Спорт"
+    else:            p = ""
+    if "SAMM" in c or "CSMM" in c:   g = "М"
+    elif "SAMW" in c or "CSMW" in c: g = "Ж"
+    else:                             g = ""
     w = ""
     if "ADT" in c:
         parts = c.split("ADT")
-        if len(parts)>1:
-            w = (parts[1][:-1]+"+") if parts[1].endswith('O') else parts[1]
+        if len(parts) > 1:
+            w = (parts[1][:-1] + "+") if parts[1].endswith('O') else parts[1]
     return f"{p} {g} {w}кг".strip()
 
-def clean_int(v, default:int=0) -> int:
-    try: return int(float(v)) if pd.notna(v) else default
-    except: return default
+def ci(v, d=0):
+    try: return int(float(v)) if pd.notna(v) else d
+    except: return d
 
-def get_initials(name:str) -> str:
-    parts = name.strip().split()
-    if len(parts)>=2: return (parts[0][0]+parts[-1][0]).upper()
-    return name[:2].upper() if name else "??"
+def inits(name):
+    p = name.strip().split()
+    if len(p) >= 2: return (p[0][0] + p[-1][0]).upper()
+    return name[:2].upper() if name else "?"
 
-def fmt_dob(raw:str) -> str:
+def fmt_dob(raw):
     try: return datetime.strptime(raw, "%Y-%m-%d").strftime("%d.%m.%Y")
     except: return raw
 
-def calc_age(raw:str) -> str:
+def calc_age(raw):
     try:
         dob = datetime.strptime(raw, "%Y-%m-%d")
-        age = (datetime.now() - dob).days // 365
-        return f"{age} лет"
+        return f"{(datetime.now()-dob).days//365} лет"
     except: return ""
 
-# =============================================================================
-# WIKIPEDIA API
-# =============================================================================
-
+# ─────────────────────────────────────────────────────────────────────────────
+# WIKIPEDIA
+# ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_wikipedia(name:str) -> dict:
-    """Ищет статью на ru.wikipedia, затем en.wikipedia. Возвращает {title, extract, url}."""
-    for lang in ("ru","en"):
+def wiki_get(name):
+    for lang in ("ru", "en"):
         try:
-            url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{name.replace(' ','_')}"
-            r = requests.get(url, timeout=5)
+            r = requests.get(
+                f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{name.replace(' ','_')}",
+                timeout=6, headers={"User-Agent": "FightGuru/5.0"}
+            )
             if r.status_code == 200:
-                data = r.json()
-                if data.get("type") == "standard":
+                d = r.json()
+                if d.get("type") == "standard":
                     return {
-                        "title":   data.get("title",""),
-                        "extract": data.get("extract","")[:600],
-                        "url":     data.get("content_urls",{}).get("desktop",{}).get("page",""),
+                        "title":   d.get("title", ""),
+                        "extract": d.get("extract", "")[:700],
+                        "url":     d.get("content_urls", {}).get("desktop", {}).get("page", ""),
+                        "lang":    lang,
                     }
         except: pass
     return {}
 
-# =============================================================================
-# ГЕНЕРАТОР ВОПРОСОВ ДЛЯ ИНТЕРВЬЮ (локальный, без ИИ)
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# ВОПРОСЫ
+# ─────────────────────────────────────────────────────────────────────────────
+def gen_q(name, acnt, age, wins, losses, finals, total, recent):
+    fn    = name.split()[0] if name else "Спортсмен"
+    cname = cn(acnt)
+    wr    = round(wins/total*100) if total else 0
+    qs    = []
 
-def generate_questions(name:str, country:str, age_str:str, wins:int, losses:int,
-                       finals:int, total:int, recent_matches:list) -> list:
-    """
-    Генерирует 3 персонализированных вопроса на основе данных атлета.
-    Использует шаблоны + реальные данные из CSV. Без интернета.
-    """
-    first_name = name.split()[0] if name else "Спортсмен"
-    questions  = []
-
-    # ── блок 1: про последний матч / текущий турнир ──────────────────────────
-    if recent_matches:
-        last = recent_matches[0]
-        opp      = last.get("opp","соперника")
-        result   = last.get("result","")
-        tourney  = last.get("tourney","")
-        round_l  = last.get("round","")
-        score    = last.get("score","")
-        opp_flag = last.get("opp_flag","")
-
-        if result == "WIN":
-            templates_1 = [
-                f"{first_name}, только что победил {opp_flag} {opp} со счётом {score} — что почувствовал в момент победы?",
-                f"Отличная победа над {opp_flag} {opp}! Что стало ключом к этому бою?",
-                f"{first_name}, {score} в {round_l} — выглядело уверенно. Это план был такой или всё шло по ситуации?",
+    # Q1 — последний бой
+    if recent:
+        m   = recent[0]
+        opp = m["opp"]; res = m["res"]; sc = m["sc"]; rnd = m["rnd"]; ofl = m["ofl"]
+        if res == "W":
+            pool = [
+                f"{fn}, только что победил {ofl} {opp} со счётом {sc} — что почувствовал?",
+                f"Победа над {ofl} {opp}, {sc}. Это тактика или кураж?",
+                f"{fn}, {sc} в {rnd} — всё шло по плану или импровизировал?",
             ]
         else:
-            templates_1 = [
-                f"{first_name}, поражение от {opp_flag} {opp} — что пошло не так и как быстро приходишь в себя?",
-                f"Бой с {opp_flag} {opp} завершился не в твою пользу. Что берёшь из него на будущее?",
-                f"{first_name}, счёт {score} — был момент когда чувствовал что можешь переломить?",
+            pool = [
+                f"{fn}, поражение от {ofl} {opp} — что пошло не так?",
+                f"Бой с {ofl} {opp} не в твою пользу. Что берёшь из него?",
+                f"Счёт {sc} — был момент когда чувствовал что можешь переломить?",
             ]
-        questions.append(random.choice(templates_1))
+        qs.append(random.choice(pool))
 
-    # ── блок 2: про карьеру / статистику ─────────────────────────────────────
-    winrate = round(wins / total * 100) if total > 0 else 0
-
+    # Q2 — карьера
     if finals >= 2:
-        q2_pool = [
-            f"У тебя уже {finals} финала в карьере — для тебя финал это кайф или стресс?",
-            f"{finals} финала — это уже система. Что меняется в голове когда знаешь что снова в финале?",
-            f"{first_name}, ты регулярно доходишь до финалов. В чём секрет стабильности?",
+        pool2 = [
+            f"У тебя {finals} финала — финал для тебя кайф или стресс?",
+            f"{fn}, ты снова в финале. Что меняется в голове?",
+            f"Регулярно доходишь до финалов. В чём секрет стабильности?",
         ]
-    elif winrate >= 70:
-        q2_pool = [
-            f"{winrate}% побед — это результат чего: таланта, работы или правильного тренера?",
-            f"{first_name}, ты побеждаешь в {winrate}% боёв. Что делает тебя сложным соперником?",
-            f"Такой процент побед — это серьёзно. Есть ли соперник которого ты реально опасаешься?",
+    elif wr >= 75:
+        pool2 = [
+            f"{wr}% побед — это талант, труд или тренер?",
+            f"Что делает тебя сложным соперником на ковре?",
+            f"Такой процент побед — есть соперник которого реально опасаешься?",
         ]
     elif losses > wins:
-        q2_pool = [
-            f"{first_name}, сейчас больше поражений чем побед — что это за период и как работаешь над ошибками?",
-            f"В самбо поражения — это тоже опыт. Какое твоё поражение дало больше всего?",
-            f"{first_name}, через что сейчас проходишь как спортсмен?",
+        pool2 = [
+            f"Сложный период в карьере? Как работаешь над ошибками?",
+            f"Какое поражение дало тебе больше всего как спортсмену?",
+            f"{fn}, через что сейчас проходишь в карьере?",
         ]
     else:
-        q2_pool = [
-            f"{first_name}, {wins} побед в карьере — какая самая памятная?",
-            f"Что мотивирует тебя продолжать выступать на высшем уровне?",
-            f"{first_name}, опиши свой обычный день на соревнованиях — от подъёма до ковра.",
+        pool2 = [
+            f"{fn}, {wins} побед — какая самая памятная?",
+            f"Что мотивирует продолжать выступать на таком уровне?",
+            f"Опиши свой день на соревнованиях — от подъёма до ковра.",
         ]
-    questions.append(random.choice(q2_pool))
+    qs.append(random.choice(pool2))
 
-    # ── блок 3: личное / про страну / соцсети ────────────────────────────────
-    country_name = get_country(country)
-    q3_pool = [
-        f"Самбо в {country_name} — это популярный вид спорта или всё ещё приходится объяснять что это?",
-        f"{first_name}, есть ли у тебя соцсети? Где тебя можно найти?",
-        f"Что в самбо такого что ты выбрал именно его а не другой вид борьбы?",
-        f"Есть спортсмен — кумир? На кого равняешься?",
-        f"{first_name}, что посоветуешь тем кто только начинает заниматься самбо?",
+    # Q3 — личное
+    pool3 = [
+        f"Самбо в {cname} — популярный спорт или приходится объяснять?",
+        f"{fn}, есть соцсети? Где тебя найти?",
+        f"Почему самбо а не другая борьба?",
+        f"Есть спортсмен-кумир? На кого равняешься?",
+        f"{fn}, что посоветуешь тем кто только начинает самбо?",
         f"Самый тяжёлый момент в карьере — и как прошёл через него?",
-        f"Ты выступаешь за {country_name} — что значит для тебя защищать цвета своей страны?",
+        f"Что значит защищать цвета {cname}?",
+        f"{fn}, следующая большая цель?",
     ]
-    questions.append(random.choice(q3_pool))
+    qs.append(random.choice(pool3))
+    return qs
 
-    return questions
-
-# =============================================================================
-# РАБОТА С ИНТЕРВЬЮ (JSON-файл)
-# =============================================================================
-
-def load_interviews() -> dict:
+# ─────────────────────────────────────────────────────────────────────────────
+# ИНТЕРВЬЮ (JSON)
+# ─────────────────────────────────────────────────────────────────────────────
+def load_ivw():
     if os.path.exists(INTERVIEWS_FILE):
         try:
             with open(INTERVIEWS_FILE, "r", encoding="utf-8") as f:
@@ -366,732 +521,790 @@ def load_interviews() -> dict:
         except: pass
     return {}
 
-def save_interview(athlete_name:str, date:str, answers:list):
-    data = load_interviews()
-    key  = athlete_name.strip().upper()
-    if key not in data:
-        data[key] = []
-    data[key].append({"date": date, "answers": answers})
+def save_ivw(name, date, answers):
+    d = load_ivw()
+    k = name.strip().upper()
+    if k not in d: d[k] = []
+    d[k].append({"date": date, "answers": answers})
     with open(INTERVIEWS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(d, f, ensure_ascii=False, indent=2)
 
-# =============================================================================
-# ЗАГРУЗКА ДАННЫХ
-# =============================================================================
-
+# ─────────────────────────────────────────────────────────────────────────────
+# ДАННЫЕ
+# ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_data():
-    if not os.path.exists(DATABASE_FILE):
-        return None
+    if not os.path.exists(DB_FILE): return None
     try:
-        df = pd.read_csv(DATABASE_FILE, low_memory=False)
+        df = pd.read_csv(DB_FILE, low_memory=False)
         df.columns = [c.strip().lower() for c in df.columns]
-        for col in ['winner_athlete_id','red_id','blue_id']:
+        for col in ['winner_athlete_id', 'red_id', 'blue_id']:
             if col in df.columns:
                 df[col] = df[col].apply(
-                    lambda x: str(int(float(x))) if pd.notna(x) and str(x).lower()!='nan' else None
+                    lambda x: str(int(float(x))) if pd.notna(x) and str(x).lower() != 'nan' else None
                 )
         df['red_full_name']  = df['red_first_name'].fillna('') + " " + df['red_last_name'].fillna('')
         df['blue_full_name'] = df['blue_first_name'].fillna('') + " " + df['blue_last_name'].fillna('')
         df['date_start']     = pd.to_datetime(df['date_start'], errors='coerce')
         df['year']           = df['date_start'].dt.year
         df['round_rank']     = df['round_code'].apply(
-            lambda x: ROUND_MAP.get(str(x).upper(),(0,str(x)))[0]
+            lambda x: ROUND_MAP.get(str(x).upper(), (0, str(x)))[0]
         )
         return df
     except Exception as e:
-        st.error(f"Ошибка загрузки данных: {e}")
-        return None
+        st.error(f"Ошибка загрузки: {e}"); return None
 
 df = load_data()
 
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 # ТЕЛЕГРАМ-БОТ
-# =============================================================================
-if "bot_active" not in st.session_state:
-    st.session_state.bot_active = False
+# Используем Process вместо Thread — переживает st.rerun()
+# Запускается ровно один раз через файл-флаг
+# ─────────────────────────────────────────────────────────────────────────────
+BOT_PID_FILE = ".bot_pid"
 
-if BOT_TOKEN and TELEBOT_AVAILABLE and not st.session_state.bot_active:
+def _bot_worker(token, db_path):
+    """Запускается в отдельном процессе. Читает CSV сам."""
+    import telebot, pandas as pd, time
+    from datetime import datetime
+
     try:
-        bot    = telebot.TeleBot(BOT_TOKEN, threaded=False)
-        _df_bot = df  # явно захватываем df в замыкание — иначе поток его не видит
-
-        @bot.message_handler(commands=['start'])
-        def welcome(m):
-            bot.reply_to(m,
-                "🥋 FIGHTGURU\n\n"
-                "Введите фамилию атлета (латиницей).\n"
-                "Можно добавить имя через пробел: Kurzhev Ali"
-            )
-
-        @bot.message_handler(func=lambda m: True)
-        def bot_search(m):
-            raw   = m.text.strip()
-            parts = raw.lower().split()
-            if len(parts[0]) < 3:
-                bot.reply_to(m, "Введите минимум 3 символа."); return
-            if _df_bot is None:
-                bot.reply_to(m, "База данных недоступна."); return
-
-            # ищем по фамилии (первое слово), затем фильтруем по имени если дано
-            last_q = parts[0]
-            res = _df_bot[
-                _df_bot['red_last_name'].str.lower().str.contains(last_q, na=False) |
-                _df_bot['blue_last_name'].str.lower().str.contains(last_q, na=False)
-            ].copy()
-
-            if len(parts) >= 2:
-                first_q = parts[1]
-                res = res[
-                    res['red_first_name'].str.lower().str.startswith(first_q, na=False) |
-                    res['blue_first_name'].str.lower().str.startswith(first_q, na=False)
-                ]
-
-            if res.empty:
-                bot.reply_to(m, f"Атлет не найден: {raw}"); return
-
-            # определяем имя атлета
-            row0   = res.iloc[0]
-            if last_q in str(row0['red_last_name']).lower():
-                name = str(row0['red_full_name'])
-            else:
-                name = str(row0['blue_full_name'])
-
-            wins   = 0; losses = 0
-            for _, r in res.iterrows():
-                is_red = last_q in str(r['red_last_name']).lower()
-                wid    = str(r.get('winner_athlete_id',''))
-                mid    = str(r.get('red_id','') if is_red else r.get('blue_id',''))
-                if wid == mid and wid: wins += 1
-                else: losses += 1
-
-            recent = res.sort_values('date_start', ascending=False).head(3)
-            msg = (
-                f"📊 {name.upper()}\n"
-                f"Боёв: {wins+losses} | ✅ {wins} | ❌ {losses}\n\n"
-                f"Последние матчи:\n"
-            )
-            for _, r in recent.iterrows():
-                yr     = r['date_start'].year if pd.notna(r['date_start']) else "????"
-                is_red = last_q in str(r['red_last_name']).lower()
-                wid    = str(r.get('winner_athlete_id',''))
-                mid    = str(r.get('red_id','') if is_red else r.get('blue_id',''))
-                won    = (wid == mid and wid != '')
-                my_sc  = clean_int(r.get('red_score') if is_red else r.get('blue_score'))
-                op_sc  = clean_int(r.get('blue_score') if is_red else r.get('red_score'))
-                opp    = str(r['blue_full_name'] if is_red else r['red_full_name'])
-                res_e  = "✅" if won else "❌"
-                msg += f"{res_e} {yr} | {my_sc}:{op_sc} vs {opp[:20]}\n"
-
-            bot.send_message(m.chat.id, msg)
-
-        def _run_bot():
-            try:
-                bot.infinity_polling(timeout=15, long_polling_timeout=10)
-            except Exception as e:
-                pass  # тихо перезапустится при следующем старте приложения
-
-        threading.Thread(target=_run_bot, daemon=True).start()
-        st.session_state.bot_active = True
+        bdf = pd.read_csv(db_path, low_memory=False)
+        bdf.columns = [c.strip().lower() for c in bdf.columns]
+        for col in ['winner_athlete_id', 'red_id', 'blue_id']:
+            if col in bdf.columns:
+                bdf[col] = bdf[col].apply(
+                    lambda x: str(int(float(x))) if pd.notna(x) and str(x).lower() != 'nan' else None
+                )
+        bdf['red_full_name']  = bdf['red_first_name'].fillna('') + " " + bdf['red_last_name'].fillna('')
+        bdf['blue_full_name'] = bdf['blue_first_name'].fillna('') + " " + bdf['blue_last_name'].fillna('')
+        bdf['date_start']     = pd.to_datetime(bdf['date_start'], errors='coerce')
     except Exception as e:
-        pass
+        print(f"BOT: ошибка загрузки БД: {e}"); return
 
-# =============================================================================
+    RMAP = {
+        'FIN':'Финал','FNL':'Финал','SFL':'1/2','QFL':'1/4',
+        'R16':'1/8','R32':'1/16','R64':'1/32','R128':'1/64',
+        'BR1':'Бронза','BR2':'Бронза','RP1':'Утешит.','RP2':'Утешит.',
+    }
+    FC = {'FIN','FNL'}
+
+    def _ci(v, d=0):
+        try: return int(float(v)) if pd.notna(v) else d
+        except: return d
+
+    bot = telebot.TeleBot(token, threaded=True)
+
+    @bot.message_handler(commands=['start', 'help'])
+    def on_start(m):
+        bot.send_message(m.chat.id,
+            "🥋 *FIGHTGURU*\n\n"
+            "Введите фамилию атлета латиницей.\n"
+            "Для точного поиска — фамилия и имя: `Kurzhev Ali`\n\n"
+            "Получите статистику, последние результаты и данные о карьере.",
+            parse_mode="Markdown"
+        )
+
+    @bot.message_handler(func=lambda m: True)
+    def on_msg(m):
+        raw   = m.text.strip()
+        parts = raw.lower().split()
+        if not parts or len(parts[0]) < 2:
+            bot.reply_to(m, "Введите фамилию (минимум 2 символа)."); return
+
+        last_q  = parts[0]
+        first_q = parts[1] if len(parts) >= 2 else None
+
+        # поиск
+        mask = (
+            bdf['red_last_name'].str.lower().str.contains(last_q, na=False) |
+            bdf['blue_last_name'].str.lower().str.contains(last_q, na=False)
+        )
+        res = bdf[mask].copy()
+
+        if first_q:
+            res = res[
+                res['red_first_name'].str.lower().str.startswith(first_q, na=False) |
+                res['blue_first_name'].str.lower().str.startswith(first_q, na=False)
+            ]
+
+        if res.empty:
+            bot.reply_to(m, f"❌ Не найден: *{raw}*\nПроверьте написание.", parse_mode="Markdown")
+            return
+
+        # имя и страна
+        r0 = res.iloc[0]
+        if last_q in str(r0.get('red_last_name', '')).lower():
+            aname = str(r0['red_full_name']).strip()
+            acnt  = str(r0.get('red_nationality_code', '')).upper()
+        else:
+            aname = str(r0['blue_full_name']).strip()
+            acnt  = str(r0.get('blue_nationality_code', '')).upper()
+
+        # статистика
+        wins = losses = finals_c = 0
+        for _, row in res.iterrows():
+            is_r = last_q in str(row.get('red_last_name', '')).lower()
+            wid  = str(row.get('winner_athlete_id', ''))
+            mid  = str(row.get('red_id', '') if is_r else row.get('blue_id', ''))
+            won  = (wid == mid and wid != '')
+            if won: wins += 1
+            else:   losses += 1
+            if str(row.get('round_code', '')).upper() in FC: finals_c += 1
+
+        total = wins + losses
+        wr    = round(wins / total * 100) if total else 0
+
+        # последние 5 матчей
+        recent = res.sort_values('date_start', ascending=False).head(5)
+        lines  = ""
+        for _, row in recent.iterrows():
+            yr   = int(row['date_start'].year) if pd.notna(row['date_start']) else "?"
+            is_r = last_q in str(row.get('red_last_name', '')).lower()
+            wid  = str(row.get('winner_athlete_id', ''))
+            mid  = str(row.get('red_id', '') if is_r else row.get('blue_id', ''))
+            won  = (wid == mid and wid != '')
+            msc  = _ci(row.get('red_score') if is_r else row.get('blue_score'))
+            osc  = _ci(row.get('blue_score') if is_r else row.get('red_score'))
+            opp  = str(row['blue_full_name'] if is_r else row['red_full_name']).strip()
+            rc   = RMAP.get(str(row.get('round_code', '')).upper(), '?')
+            ico  = "✅" if won else "❌"
+            lines += f"{ico} {yr} {rc} | {msc}:{osc} vs {opp[:18]}\n"
+
+        flag_emoji = FLAGS.get(acnt, "🌍")
+        cname      = COUNTRIES.get(acnt, acnt)
+
+        msg = (
+            f"📊 *{aname}*\n"
+            f"{flag_emoji} {cname}\n\n"
+            f"Боёв: *{total}* | ✅ *{wins}* | ❌ *{losses}* | *{wr}%*"
+        )
+        if finals_c:
+            msg += f" | 🏆 {finals_c} фин."
+        msg += f"\n\n*Последние матчи:*\n{lines}"
+
+        try:
+            bot.send_message(m.chat.id, msg, parse_mode="Markdown")
+        except Exception:
+            # fallback без разметки если Markdown сломался
+            bot.send_message(m.chat.id, msg.replace("*",""))
+
+    # пишем PID чтобы не запускать повторно
+    with open(BOT_PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+    print(f"BOT started pid={os.getpid()}")
+    bot.infinity_polling(timeout=20, long_polling_timeout=15, restart_on_change=False)
+
+
+def start_bot_if_needed():
+    if not BOT_TOKEN or not TELEBOT_OK or not os.path.exists(DB_FILE):
+        return
+    # проверяем: уже запущен?
+    if os.path.exists(BOT_PID_FILE):
+        try:
+            pid = int(open(BOT_PID_FILE).read().strip())
+            os.kill(pid, 0)   # проверка — если процесс жив, исключения нет
+            return            # бот уже работает
+        except (ProcessLookupError, ValueError, OSError):
+            pass              # процесс мёртв — запустим заново
+    p = Process(target=_bot_worker, args=(BOT_TOKEN, DB_FILE), daemon=True)
+    p.start()
+
+start_bot_if_needed()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
-# =============================================================================
-for key, val in [
-    ('search_query', ''), ('filter_mode', 'Все'),
-    ('camera_mode', False), ('tab', 'matches'),
-    ('questions', []), ('wiki_data', {}),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = val
+# Ключевой принцип: sq хранится ТОЛЬКО в session_state.
+# st.text_input читает его оттуда через key=, не через value=.
+# Это предотвращает сброс поля при rerun от кнопок фильтра.
+# ─────────────────────────────────────────────────────────────────────────────
+SS_DEFAULTS = {
+    'sq':          '',      # текущий поисковый запрос
+    'filter':      'Все',   # активный фильтр матчей
+    'sel':         None,    # выбранный атлет (при неоднозначности)
+    'prev_sq':     '',      # предыдущий запрос — для детекции смены
+    'cam':         False,   # режим камеры
+    'questions':   {},      # кэш вопросов по атлету
+}
+for k, v in SS_DEFAULTS.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 # САЙДБАР
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🥋 FightGuru")
+    st.markdown("### 🥋 FightGuru")
     st.markdown("---")
     nav = st.radio("", ["👤 Досье", "🏛️ Пантеон"], label_visibility="collapsed")
     st.markdown("---")
     if nav == "👤 Досье":
-        st.markdown("**Режим камеры**")
-        cam_toggle = st.toggle("📹 Перед эфиром", value=st.session_state.camera_mode)
-        if cam_toggle != st.session_state.camera_mode:
-            st.session_state.camera_mode = cam_toggle
+        cam_val = st.toggle("📹 Режим камеры", value=st.session_state.cam)
+        if cam_val != st.session_state.cam:
+            st.session_state.cam = cam_val
             st.rerun()
-        if st.session_state.camera_mode:
-            st.info("Крупный вид для съёмки")
+    st.markdown("---")
+    if BOT_TOKEN:
+        st.markdown("<small style='color:#2a2d3d'>🤖 Telegram-бот активен</small>",
+                    unsafe_allow_html=True)
+    if df is not None:
+        st.markdown(f"<small style='color:#2a2d3d'>📊 {len(df):,} матчей</small>",
+                    unsafe_allow_html=True)
 
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 # GUARD
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 if df is None:
-    st.error(f"Файл '{DATABASE_FILE}' не найден.")
-    st.stop()
-
-# =============================================================================
-# ═══════════════  РАЗДЕЛ: ДОСЬЕ  ═══════════════
-# =============================================================================
-if nav == "👤 Досье":
-
-    search_input = st.text_input(
-        "Поиск", value=st.session_state.search_query,
-        placeholder="Фамилия атлета — напр. Karashtin",
-        label_visibility="collapsed",
-    )
-
-    if not search_input:
-        st.markdown(
-            "<p style='color:#333; font-size:15px; margin-top:40px; text-align:center;'>"
-            "Введите фамилию атлета</p>", unsafe_allow_html=True)
-        st.stop()
-
-    # Сбрасываем выбранного атлета если поисковый запрос изменился
-    if st.session_state.get('last_search') != search_input:
-        st.session_state.pop('selected_athlete', None)
-        st.session_state['last_search'] = search_input
-
-    search_low   = search_input.lower().strip()
-    search_parts = search_low.split()
-
-    # ── УМНЫЙ ПОИСК ──────────────────────────────────────────────────────────
-    # Если введено два+ слова — ищем по фамилии И имени одновременно.
-    # Это решает проблему братьев Куржевых: "kurzhev ali" найдёт только Ali,
-    # а не обоих. Одно слово — ищем только по фамилии (точное совпадение).
-
-    def row_matches_search(r, parts):
-        """Возвращает (matched: bool, side: str | None)"""
-        for side in ("red", "blue"):
-            last  = str(r.get(f"{side}_last_name",  "")).lower().strip()
-            first = str(r.get(f"{side}_first_name", "")).lower().strip()
-            if len(parts) == 1:
-                # одно слово → точное совпадение фамилии
-                if parts[0] == last:
-                    return True, side
-            else:
-                # два слова → первое = фамилия, второе = начало имени (или наоборот)
-                # пробуем оба порядка: "kurzhev ali" и "ali kurzhev"
-                comb1 = parts[0] == last and first.startswith(parts[1])
-                comb2 = parts[1] == last and first.startswith(parts[0])
-                if comb1 or comb2:
-                    return True, side
-        return False, None
-
-    # Если точный поиск ничего не нашёл — fallback на contains по фамилии
-    exact_rows = []
-    for _, r in df.iterrows():
-        matched, side = row_matches_search(r, search_parts)
-        if matched:
-            exact_rows.append((r.name, side))
-
-    if exact_rows:
-        match_idx = [x[0] for x in exact_rows]
-        matches   = df.loc[match_idx].copy()
-    else:
-        # fallback: contains по фамилии (старое поведение)
-        matches = df[
-            df['red_last_name'].str.lower().str.contains(search_parts[0], na=False) |
-            df['blue_last_name'].str.lower().str.contains(search_parts[0], na=False)
-        ].copy()
-
-    if matches.empty:
-        st.info("Атлет не найден. Попробуйте ввести фамилию и имя через пробел.")
-        st.stop()
-
-    matches = matches.sort_values(['date_start','round_rank'], ascending=[False,False])
-
-    # ── ОПРЕДЕЛЯЕМ УНИКАЛЬНЫХ АТЛЕТОВ в результатах ──────────────────────────
-    # Собираем все уникальные полные имена которые нашлись
-    found_athletes = {}  # full_name → {'id': athlete_id, 'country': code}
-    for _, r in matches.iterrows():
-        for side in ("red","blue"):
-            last  = str(r.get(f"{side}_last_name","")).lower().strip()
-            first = str(r.get(f"{side}_first_name","")).lower().strip()
-            # проверяем что эта строка относится к нашему запросу
-            if len(search_parts) == 1:
-                relevant = search_parts[0] == last
-            else:
-                comb1 = search_parts[0] == last and first.startswith(search_parts[1])
-                comb2 = search_parts[1] == last and first.startswith(search_parts[0])
-                relevant = comb1 or comb2
-                if not relevant and exact_rows:
-                    relevant = False
-                elif not relevant:
-                    relevant = search_parts[0] in last  # fallback
-
-            if relevant:
-                full = str(r.get(f"{side}_full_name","")).strip()
-                aid  = str(r.get(f"{side}_id",""))
-                if full and full not in found_athletes:
-                    found_athletes[full] = {
-                        "id":      aid,
-                        "country": str(r.get(f"{side}_nationality_code","")).upper(),
-                    }
-
-    # ── ЕСЛИ НАЙДЕНО НЕСКОЛЬКО АТЛЕТОВ — показываем выбор ───────────────────
-    if len(found_athletes) > 1 and 'selected_athlete' not in st.session_state:
-        st.markdown(
-            "<p style='font-size:16px; color:#e8e8e8; margin-bottom:14px;'>"
-            f"Найдено <b>{len(found_athletes)}</b> атлета с похожей фамилией. Выберите нужного:</p>",
-            unsafe_allow_html=True,
-        )
-        for full_name, info in found_athletes.items():
-            flag = get_flag(info["country"])
-            cname = get_country(info["country"])
-            col_a, col_b = st.columns([3, 1])
-            with col_a:
-                st.markdown(
-                    f"<div style='background:#1c1e28;border:1px solid #2a2d3a;border-radius:10px;"
-                    f"padding:14px 18px;margin-bottom:8px;font-size:16px;color:#e8e8e8;'>"
-                    f"{flag} <b>{full_name}</b> <span style='color:#555;font-size:13px;'>· {cname}</span></div>",
-                    unsafe_allow_html=True,
-                )
-            with col_b:
-                if st.button("Выбрать", key=f"sel_{full_name}"):
-                    st.session_state.selected_athlete = full_name
-                    st.rerun()
-        st.stop()
-
-    # Если атлет уже выбран или он один — фильтруем matches только под него
-    if 'selected_athlete' in st.session_state:
-        chosen_name = st.session_state.selected_athlete
-        # Кнопка сброса выбора
-        if st.button(f"← Назад к списку", key="back_sel"):
-            del st.session_state['selected_athlete']
-            st.rerun()
-    elif len(found_athletes) == 1:
-        chosen_name = list(found_athletes.keys())[0]
-        st.session_state.selected_athlete = chosen_name
-    else:
-        chosen_name = None
-
-    # Фильтруем matches: оставляем только строки где участвует chosen_name
-    if chosen_name:
-        chosen_low = chosen_name.lower().strip()
-        def row_has_athlete(r):
-            return (
-                str(r.get('red_full_name','')).lower().strip()  == chosen_low or
-                str(r.get('blue_full_name','')).lower().strip() == chosen_low
-            )
-        matches = matches[matches.apply(row_has_athlete, axis=1)].copy()
-
-    if matches.empty:
-        st.info("Не найдено матчей для выбранного атлета.")
-        st.stop()
-
-    # ── собираем данные атлета ────────────────────────────────────────────────
-    dob_list, country_list, final_name = [], [], ""
-    chosen_low = chosen_name.lower().strip() if chosen_name else search_low
-
-    for _, r in matches.iterrows():
-        for side in ("red","blue"):
-            full = str(r.get(f"{side}_full_name","")).lower().strip()
-            if full == chosen_low:
-                final_name = str(r.get(f"{side}_full_name","")).strip()
-                v = r.get(f"{side}_birth_date")
-                if v and pd.notna(v): dob_list.append(str(v).strip())
-                country_list.append(str(r.get(f"{side}_nationality_code","")).upper())
-                break
-
-    raw_dob         = max(set(dob_list), key=dob_list.count) if dob_list else ""
-    athlete_dob     = fmt_dob(raw_dob)
-    athlete_age     = calc_age(raw_dob)
-    athlete_country = max(set(country_list), key=country_list.count) if country_list else ""
-
-    # ── статистика ────────────────────────────────────────────────────────────
-    wins = losses = finals = 0
-    recent_for_questions = []
-
-    for _, row in matches.iterrows():
-        # Определяем сторону по точному совпадению полного имени
-        is_red = str(row.get('red_full_name','')).lower().strip() == chosen_low
-        win_id = str(row.get('winner_athlete_id',''))
-        my_id  = str(row.get('red_id','') if is_red else row.get('blue_id',''))
-        won    = (win_id == my_id and win_id != '')
-        if won: wins += 1
-        else:   losses += 1
-        rc = str(row.get('round_code','')).upper()
-        if rc in FINALS_CODES: finals += 1
-
-        if len(recent_for_questions) < 3:
-            opp_full = str(row['blue_full_name'] if is_red else row['red_full_name'])
-            opp_code = row['blue_nationality_code'] if is_red else row['red_nationality_code']
-            my_sc    = clean_int(row.get('red_score') if is_red else row.get('blue_score'))
-            opp_sc   = clean_int(row.get('blue_score') if is_red else row.get('red_score'))
-            recent_for_questions.append({
-                "opp":      opp_full,
-                "opp_flag": get_flag(opp_code),
-                "result":   "WIN" if won else "LOSS",
-                "score":    f"{my_sc}:{opp_sc}",
-                "tourney":  str(row.get('tournament_name','')),
-                "round":    ROUND_MAP.get(rc,(0,rc))[1],
-            })
-
-    total = wins + losses
-
-    # ── категория (самая частая) ───────────────────────────────────────────────
-    cat_counts = matches['category_code'].value_counts()
-    main_cat   = get_cat(cat_counts.index[0]) if not cat_counts.empty else ""
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # РЕЖИМ КАМЕРЫ
-    # ─────────────────────────────────────────────────────────────────────────
-    if st.session_state.camera_mode:
-
-        if not st.session_state.questions:
-            st.session_state.questions = generate_questions(
-                final_name, athlete_country, athlete_age,
-                wins, losses, finals, total, recent_for_questions
-            )
-
-        qs = st.session_state.questions
-        flag    = get_flag(athlete_country)
-        country = get_country(athlete_country)
-
-        st.markdown(f"""
-        <div class="camera-card">
-          <div class="cam-name">{final_name}</div>
-          <div class="cam-sub">{flag} {country} · {athlete_dob} · {athlete_age}</div>
-          <div class="cam-scores">
-            <div class="cam-stat"><div class="cam-num w">{total}</div><div class="cam-slabel">Боёв</div></div>
-            <div class="cam-stat"><div class="cam-num g">{wins}</div><div class="cam-slabel">Победы</div></div>
-            <div class="cam-stat"><div class="cam-num r">{losses}</div><div class="cam-slabel">Поражения</div></div>
-            <div class="cam-stat"><div class="cam-num w">{finals}</div><div class="cam-slabel">Финалы</div></div>
-          </div>
-          {"".join(f'<div class="cam-q"><div class="cam-qnum">Вопрос {i+1}</div><div class="cam-qtext">{q}</div></div>' for i,q in enumerate(qs))}
-        </div>
-        """, unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Новые вопросы", use_container_width=True):
-                st.session_state.questions = generate_questions(
-                    final_name, athlete_country, athlete_age,
-                    wins, losses, finals, total, recent_for_questions
-                )
-                st.rerun()
-        with col2:
-            if st.button("✖ Выйти из режима камеры", use_container_width=True):
-                st.session_state.camera_mode = False
-                st.rerun()
-        st.stop()
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # ОБЫЧНЫЙ РЕЖИМ
-    # ─────────────────────────────────────────────────────────────────────────
-
-    # профиль
-    initials = get_initials(final_name)
-    flag     = get_flag(athlete_country)
-    country  = get_country(athlete_country)
-
-    meta_parts = [f"{flag} {country}"]
-    if athlete_dob: meta_parts.append(f"Дата рождения: {athlete_dob}")
-    if athlete_age: meta_parts.append(athlete_age)
-    if main_cat:    meta_parts.append(main_cat)
-
-    st.markdown(f"""
-    <div class="profile-card">
-      <div class="avatar">{initials}</div>
-      <div>
-        <div class="profile-name">{final_name}</div>
-        <div class="profile-sub">{" &nbsp;·&nbsp; ".join(meta_parts)}</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # статы
-    winrate = round(wins/total*100) if total else 0
-    st.markdown(f"""
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-label">Всего боёв</div><div class="stat-val">{total}</div></div>
-      <div class="stat-card"><div class="stat-label">Победы</div><div class="stat-val g">{wins}</div></div>
-      <div class="stat-card"><div class="stat-label">Поражения</div><div class="stat-val r">{losses}</div></div>
-      <div class="stat-card"><div class="stat-label">Процент побед</div><div class="stat-val">{winrate}%</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── вкладки ───────────────────────────────────────────────────────────────
-    tab_matches, tab_interview, tab_wiki = st.tabs(["🥊 Матчи", "🎙 Интервью", "📖 Справка"])
-
-    # ══════════════════════════════════════════
-    # ВКЛАДКА: МАТЧИ
-    # ══════════════════════════════════════════
-    with tab_matches:
-
-        # Фильтры — HTML-ссылки, не Streamlit-кнопки (те белые на тёмном фоне)
-        fm_cur      = st.session_state.filter_mode
-        filter_opts = ["Все", "Победы", "Поражения", "Финалы"]
-        btns_html   = ""
-        for opt in filter_opts:
-            if opt == fm_cur:
-                sty = "background:#c0392b;color:#fff;border-color:#c0392b;"
-            else:
-                sty = "background:#1c1e28;color:#999;border-color:#2a2d3a;"
-            btns_html += (
-                f'<a href="?filter={opt}" style="text-decoration:none;">' +
-                f'<span style="display:inline-block;font-size:13px;font-weight:600;' +
-                f'padding:8px 18px;border-radius:8px;border:1.5px solid;' +
-                f'white-space:nowrap;{sty}">{opt}</span></a> '
-            )
-        st.markdown(
-            f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
-            btns_html + '</div>',
-            unsafe_allow_html=True,
-        )
-        qp = st.query_params.get("filter", fm_cur)
-        if qp in filter_opts and qp != st.session_state.filter_mode:
-            st.session_state.filter_mode = qp
-            st.rerun()
-
-        current_year = None
-        for _, row in matches.iterrows():
-            # Определяем сторону по точному совпадению полного имени
-            is_red = str(row.get('red_full_name','')).lower().strip() == chosen_low
-            win_id = str(row.get('winner_athlete_id',''))
-            my_id  = str(row.get('red_id','') if is_red else row.get('blue_id',''))
-            is_win = (win_id == my_id and win_id != '')
-
-            fm = st.session_state.filter_mode
-            rc = str(row.get('round_code','')).upper()
-            if fm=="Победы"    and not is_win: continue
-            if fm=="Поражения" and is_win:     continue
-            if fm=="Финалы"    and rc not in FINALS_CODES: continue
-
-            my_sc   = clean_int(row.get('red_score')  if is_red else row.get('blue_score'))
-            opp_sc  = clean_int(row.get('blue_score') if is_red else row.get('red_score'))
-            my_pen  = clean_int(row.get('red_penalties')  if is_red else row.get('blue_penalties'))
-            opp_pen = clean_int(row.get('blue_penalties') if is_red else row.get('red_penalties'))
-
-            opp_full    = str(row['blue_full_name'] if is_red else row['red_full_name'])
-            opp_last    = str(row['blue_last_name'] if is_red else row['red_last_name'])
-            opp_country = row['blue_nationality_code'] if is_red else row['red_nationality_code']
-
-            round_label = ROUND_MAP.get(rc,(0,rc))[1]
-            cat_label   = get_cat(row.get('category_code',''))
-            date_str    = row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '??'
-            year        = row.get('year')
-            time_str    = format_time(row.get('fight_time',0))
-            res_cls     = "win" if is_win else "loss"
-            res_lbl     = "WIN" if is_win else "LOSS"
-
-            if pd.notna(year) and int(year) != current_year:
-                current_year = int(year)
-                st.markdown(f'<div class="year-sep">{current_year}</div>', unsafe_allow_html=True)
-
-            tags = f'<span class="tag rnd">{round_label}</span>'
-            tags += f'<span class="tag">{cat_label}</span>'
-            if my_pen > 0 or opp_pen > 0:
-                tags += f'<span class="tag pen">Пред. {my_pen} / {opp_pen}</span>'
-
-            st.markdown(f"""
-            <div class="match-card {res_cls}">
-              <div class="badge {res_cls}">
-                <span class="bscore {res_cls}">{my_sc}:{opp_sc}</span>
-                <span class="blabel {res_cls}">{res_lbl}</span>
-              </div>
-              <div style="min-width:0">
-                <div class="m-tourney">{str(row.get('tournament_name',''))}</div>
-                <div class="m-opponent"><span style="font-size:17px">{get_flag(opp_country)}</span>{opp_full}</div>
-                <div class="m-tags">{tags}</div>
-              </div>
-              <div class="m-right">
-                <div class="m-date">{date_str}</div>
-                <div class="m-time">⏱ {time_str}</div>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.button(f"→ Досье: {opp_full}", key=f"opp_{row.name}"):
-                st.session_state.search_query = opp_last
-                st.session_state.filter_mode  = "Все"
-                st.rerun()
-
-    # ══════════════════════════════════════════
-    # ВКЛАДКА: ИНТЕРВЬЮ
-    # ══════════════════════════════════════════
-    with tab_interview:
-
-        st.markdown(f"#### 🎙 Блиц-интервью — {final_name}")
-        st.caption("Вопросы сгенерированы автоматически на основе карьерных данных атлета")
-
-        # генерируем вопросы если нет или атлет поменялся
-        cache_key = f"q_{final_name}"
-        if cache_key not in st.session_state or not st.session_state[cache_key]:
-            st.session_state[cache_key] = generate_questions(
-                final_name, athlete_country, athlete_age,
-                wins, losses, finals, total, recent_for_questions
-            )
-
-        questions = st.session_state[cache_key]
-
-        # отображаем вопросы
-        for i, q in enumerate(questions):
-            st.markdown(f"""
-            <div class="q-card">
-              <div class="q-num">{i+1}</div>
-              <div class="q-text">{q}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        if st.button("🔄 Сгенерировать другие вопросы", key="regen_q"):
-            st.session_state[cache_key] = generate_questions(
-                final_name, athlete_country, athlete_age,
-                wins, losses, finals, total, recent_for_questions
-            )
-            st.rerun()
-
-        st.markdown("---")
-        st.markdown("#### 💾 Записать ответы")
-        st.caption("Сохранится в interviews.json рядом с приложением")
-
-        answers = []
-        for i, q in enumerate(questions):
-            ans = st.text_area(f"Ответ на вопрос {i+1}", key=f"ans_{i}",
-                               placeholder="Запишите ответ...", height=80)
-            answers.append({"question": q, "answer": ans})
-
-        if st.button("💾 Сохранить интервью", type="primary"):
-            filled = [a for a in answers if a["answer"].strip()]
-            if filled:
-                today = datetime.now().strftime("%d.%m.%Y %H:%M")
-                save_interview(final_name, today, answers)
-                st.success(f"✅ Интервью сохранено — {today}")
-            else:
-                st.warning("Заполните хотя бы один ответ.")
-
-        # прошлые интервью с этим атлетом
-        all_ivw = load_interviews()
-        past    = all_ivw.get(final_name.strip().upper(), [])
-        if past:
-            st.markdown("---")
-            st.markdown(f"#### 📂 Прошлые интервью с {final_name}")
-            for ivw in reversed(past):
-                with st.expander(f"🗓 {ivw['date']}"):
-                    for item in ivw['answers']:
-                        if item.get('answer','').strip():
-                            st.markdown(f"**В:** {item['question']}")
-                            st.markdown(f"**О:** {item['answer']}")
-                            st.markdown("---")
-
-    # ══════════════════════════════════════════
-    # ВКЛАДКА: СПРАВКА (WIKIPEDIA)
-    # ══════════════════════════════════════════
-    with tab_wiki:
-
-        st.markdown(f"#### 📖 Справка — {final_name}")
-
-        # пробуем несколько вариантов имени
-        name_variants = [
-            final_name,
-            " ".join(reversed(final_name.split())),   # Фамилия Имя → Имя Фамилия
-        ]
-
-        wiki = {}
-        for variant in name_variants:
-            wiki = fetch_wikipedia(variant)
-            if wiki: break
-
-        if wiki:
-            st.markdown(f"""
-            <div class="wiki-box">
-              <div class="wiki-title">Wikipedia — {wiki['title']}</div>
-              <div class="wiki-text">{wiki['extract']}</div>
-              {"<a class='wiki-link' href='" + wiki['url'] + "' target='_blank'>→ Читать полностью на Wikipedia</a>" if wiki.get('url') else ""}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="wiki-box">
-              <div class="wiki-title">Wikipedia</div>
-              <div class="wiki-text" style="color:#555;">
-                Статья о <b style="color:#888">{final_name}</b> на Wikipedia не найдена.<br><br>
-                Возможно, спортсмен ещё не имеет собственной страницы.
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # дополнительные ссылки для поиска
-        name_enc = final_name.replace(' ', '+')
-        st.markdown(f"""
-        <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
-          <a href="https://www.google.com/search?q={name_enc}+самбо" target="_blank"
-             style="font-size:14px; color:#4a7fa5; text-decoration:none;">
-            🔍 Google
-          </a>
-          <a href="https://ru.wikipedia.org/w/index.php?search={name_enc}" target="_blank"
-             style="font-size:14px; color:#4a7fa5; text-decoration:none;">
-            📖 Wikipedia поиск
-          </a>
-          <a href="https://www.youtube.com/results?search_query={name_enc}+sambo" target="_blank"
-             style="font-size:14px; color:#4a7fa5; text-decoration:none;">
-            ▶ YouTube
-          </a>
-          <a href="https://www.instagram.com/explore/tags/{final_name.replace(' ','').lower()}/" target="_blank"
-             style="font-size:14px; color:#4a7fa5; text-decoration:none;">
-            📷 Instagram
-          </a>
-        </div>
-        """, unsafe_allow_html=True)
-
-# =============================================================================
-# ═══════════════  РАЗДЕЛ: ПАНТЕОН  ═══════════════
-# =============================================================================
-elif nav == "🏛️ Пантеон":
-
-    st.markdown('<p style="font-size:26px; font-weight:700; color:#f0f0f0; margin-bottom:20px;">🏛️ Исторический Пантеон</p>', unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1: t_sel   = st.selectbox("Турнир",   list(TOURNAMENT_GROUPS.keys()))
-    with col2: div_sel = st.selectbox("Дивизион", list(DIVISIONS.keys()))
-
-    pattern = '|'.join(TOURNAMENT_GROUPS[t_sel])
-    f_data  = df[
-        df['tournament_name'].str.contains(pattern, case=False, na=False) &
-        df['category_code'].str.contains(DIVISIONS[div_sel], case=False, na=False)
+    st.error(f"Файл '{DB_FILE}' не найден."); st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ПАНТЕОН
+# ─────────────────────────────────────────────────────────────────────────────
+if nav == "🏛️ Пантеон":
+    st.markdown("<h2 style='color:#edf0ff;margin-bottom:20px'>🏛️ Исторический Пантеон</h2>",
+                unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1: tsel = st.selectbox("Турнир",   list(TOUR_GROUPS.keys()))
+    with c2: dsel = st.selectbox("Дивизион", list(DIVISIONS.keys()))
+
+    pat = '|'.join(TOUR_GROUPS[tsel])
+    fd  = df[
+        df['tournament_name'].str.contains(pat, case=False, na=False) &
+        df['category_code'].str.contains(DIVISIONS[dsel], case=False, na=False)
     ]
-    fin_matches = f_data[f_data['round_code'].str.upper().str.contains('FNL|FIN', na=False)].copy()
+    fm = fd[fd['round_code'].str.upper().str.contains('FNL|FIN', na=False)].copy()
+    if fm.empty:
+        st.warning("Нет данных."); st.stop()
 
-    if fin_matches.empty:
-        st.warning("Нет данных по выбранным фильтрам.")
-        st.stop()
-
-    def get_winner(r):
+    def _gw(r):
         if str(r['winner_athlete_id']) == str(r['red_id']):
             return r['red_full_name'], str(r['red_nationality_code']).upper()
         return r['blue_full_name'], str(r['blue_nationality_code']).upper()
 
-    fin_matches[['w_name','w_country']] = fin_matches.apply(lambda r: pd.Series(get_winner(r)), axis=1)
+    fm[['wn','wc']] = fm.apply(lambda r: pd.Series(_gw(r)), axis=1)
 
-    st.markdown("**Зачёт по странам — золото**")
-    stats = fin_matches.groupby('w_country').size().reset_index(name='gold').sort_values('gold', ascending=False)
-    rows_html = "".join(
-        f"<tr><td>{get_flag(r['w_country'])} {get_country(r['w_country'])}</td><td class='gold-num'>{r['gold']}</td></tr>"
+    st.markdown("**Зачёт по странам — 🥇 Золото**")
+    stats = fm.groupby('wc').size().reset_index(name='g').sort_values('g', ascending=False)
+    rows  = "".join(
+        f"<tr><td>{fl(r['wc'])} {cn(r['wc'])}</td><td class='gold-n'>{r['g']}</td></tr>"
         for _, r in stats.iterrows()
     )
+    st.markdown(
+        f"<table class='gold-t'><thead><tr><th>Страна</th><th>Золото</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>",
+        unsafe_allow_html=True
+    )
+    st.markdown("**По весовым категориям**")
+    for cat in sorted(fm['category_code'].unique()):
+        cdf = fm[fm['category_code'] == cat].sort_values('date_start', ascending=False)
+        with st.expander(get_cat(cat)):
+            for _, cr in cdf.iterrows():
+                yr = int(cr['date_start'].year) if pd.notna(cr['date_start']) else "?"
+                st.markdown(
+                    f"**{yr}** &nbsp; {fl(cr['wc'])} {cr['wn']}",
+                    unsafe_allow_html=True
+                )
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ДОСЬЕ — ПОИСКОВАЯ СТРОКА
+# ВАЖНО: используем key='sq' — Streamlit сам читает из session_state['sq']
+# и пишет туда при вводе. НЕ используем value= — это вызывает сброс при rerun.
+# ─────────────────────────────────────────────────────────────────────────────
+st.text_input(
+    "",
+    key="sq",
+    placeholder="🔍  Фамилия атлета — или «Фамилия Имя» для точного поиска",
+    label_visibility="collapsed",
+)
+sq = st.session_state.sq.strip()
+
+# Сброс выбора и фильтра только при смене запроса (не при rerun от фильтров)
+if sq != st.session_state.prev_sq:
+    st.session_state.sel      = None
+    st.session_state.filter   = 'Все'
+    st.session_state.prev_sq  = sq
+
+if not sq:
+    st.markdown(
+        "<p style='color:#1e2030;font-size:15px;margin-top:60px;text-align:center'>"
+        "Введите фамилию атлета</p>",
+        unsafe_allow_html=True
+    )
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ПОИСК
+# ─────────────────────────────────────────────────────────────────────────────
+parts = sq.lower().split()
+
+def match_side(row, pts):
+    """Возвращает 'red'/'blue'/None."""
+    for side in ("red", "blue"):
+        last  = str(row.get(f"{side}_last_name",  "")).lower().strip()
+        first = str(row.get(f"{side}_first_name", "")).lower().strip()
+        if len(pts) == 1:
+            if pts[0] == last: return side
+        else:
+            ok1 = pts[0] == last  and first.startswith(pts[1])
+            ok2 = pts[1] == last  and first.startswith(pts[0])
+            if ok1 or ok2: return side
+    return None
+
+# точный поиск
+exact = []
+for idx, row in df.iterrows():
+    s = match_side(row, parts)
+    if s is not None:
+        exact.append((idx, s))
+
+# fallback — contains по первому слову
+if not exact:
+    for idx, row in df.iterrows():
+        for side in ("red", "blue"):
+            last = str(row.get(f"{side}_last_name", "")).lower().strip()
+            if parts[0] in last:
+                exact.append((idx, side))
+                break
+
+if not exact:
+    st.info("Атлет не найден. Попробуйте фамилию + имя."); st.stop()
+
+idxs    = list(dict.fromkeys([x[0] for x in exact]))   # уникальные, порядок сохранён
+matches = df.loc[idxs].copy()
+matches = matches.sort_values(['date_start', 'round_rank'], ascending=[False, False])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# СЛОВАРЬ НАЙДЕННЫХ АТЛЕТОВ
+# ─────────────────────────────────────────────────────────────────────────────
+athletes = {}   # full_name → {country, id}
+for idx, row in matches.iterrows():
+    side = match_side(row, parts)
+    if side is None:
+        # fallback
+        for s in ("red", "blue"):
+            if parts[0] in str(row.get(f"{s}_last_name", "")).lower():
+                side = s; break
+    if side is None: continue
+    fn  = str(row.get(f"{side}_full_name", "")).strip()
+    cde = str(row.get(f"{side}_nationality_code", "")).upper()
+    aid = str(row.get(f"{side}_id", ""))
+    if fn and fn not in athletes:
+        athletes[fn] = {"country": cde, "id": aid}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ЭКРАН ВЫБОРА ПРИ НЕОДНОЗНАЧНОСТИ
+# ─────────────────────────────────────────────────────────────────────────────
+if len(athletes) > 1 and st.session_state.sel not in athletes:
+    st.markdown(
+        f"<p style='font-size:16px;color:#dde0ef;margin-bottom:18px'>"
+        f"Найдено <b>{len(athletes)}</b> атлета — выберите нужного:</p>",
+        unsafe_allow_html=True
+    )
+    for aname, info in athletes.items():
+        ca, cb = st.columns([5, 1])
+        with ca:
+            st.markdown(
+                f"<div style='background:#161720;border:1px solid #272a3a;"
+                f"border-radius:14px;padding:14px 20px;font-size:15px;color:#dde0ef;'>"
+                f"{fl(info['country'])} <b>{aname}</b> "
+                f"<span style='color:#2a2d3d;font-size:12px'>· {cn(info['country'])}</span></div>",
+                unsafe_allow_html=True
+            )
+        with cb:
+            if st.button("Выбрать →", key=f"pick_{aname}"):
+                st.session_state.sel = aname
+                st.rerun()
+    st.stop()
+
+# Определяем chosen
+if st.session_state.sel in athletes:
+    chosen = st.session_state.sel
+else:
+    chosen = list(athletes.keys())[0]
+
+chosen_low = chosen.lower().strip()
+
+# Фильтруем matches под выбранного
+def has_athlete(row):
+    return (
+        str(row.get('red_full_name',  '')).lower().strip() == chosen_low or
+        str(row.get('blue_full_name', '')).lower().strip() == chosen_low
+    )
+matches = matches[matches.apply(has_athlete, axis=1)].copy()
+if matches.empty:
+    st.info("Матчи не найдены."); st.stop()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ДАННЫЕ АТЛЕТА
+# ─────────────────────────────────────────────────────────────────────────────
+dob_list = []; cnt_list = []; final_name = ""
+for _, row in matches.iterrows():
+    for side in ("red", "blue"):
+        if str(row.get(f"{side}_full_name", "")).lower().strip() == chosen_low:
+            final_name = str(row.get(f"{side}_full_name", "")).strip()
+            v = row.get(f"{side}_birth_date")
+            if v and pd.notna(v): dob_list.append(str(v).strip())
+            cnt_list.append(str(row.get(f"{side}_nationality_code", "")).upper())
+            break
+
+raw_dob  = max(set(dob_list), key=dob_list.count) if dob_list else ""
+dob_fmt  = fmt_dob(raw_dob)
+age_str  = calc_age(raw_dob)
+acountry = max(set(cnt_list), key=cnt_list.count) if cnt_list else ""
+
+# статистика
+wins = losses = finals_c = 0
+win_seq = []
+recent_q = []
+for _, row in matches.iterrows():
+    is_r = str(row.get('red_full_name', '')).lower().strip() == chosen_low
+    wid  = str(row.get('winner_athlete_id', ''))
+    mid  = str(row.get('red_id', '') if is_r else row.get('blue_id', ''))
+    won  = (wid == mid and wid != '')
+    if won: wins += 1
+    else:   losses += 1
+    rc = str(row.get('round_code', '')).upper()
+    if rc in FINALS_CODES: finals_c += 1
+    win_seq.append(won)
+    if len(recent_q) < 3:
+        opp  = str(row['blue_full_name'] if is_r else row['red_full_name']).strip()
+        ocnt = row['blue_nationality_code'] if is_r else row['red_nationality_code']
+        msc  = ci(row.get('red_score')  if is_r else row.get('blue_score'))
+        osc  = ci(row.get('blue_score') if is_r else row.get('red_score'))
+        rl   = ROUND_MAP.get(rc, (0, '?'))[1]
+        recent_q.append({"opp":opp,"ofl":fl(ocnt),"res":"W" if won else "L",
+                          "sc":f"{msc}:{osc}","rnd":rl})
+
+total   = wins + losses
+winrate = round(wins / total * 100) if total else 0
+
+# streak
+s_type = "win"; s_n = 0
+if win_seq:
+    s_type = "win" if win_seq[0] else "loss"
+    for w in win_seq:
+        if (w and s_type=="win") or (not w and s_type=="loss"): s_n += 1
+        else: break
+
+# категория
+main_cat = ""
+if 'category_code' in matches.columns:
+    cc = matches['category_code'].value_counts()
+    if not cc.empty: main_cat = get_cat(cc.index[0])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# РЕЖИМ КАМЕРЫ
+# ─────────────────────────────────────────────────────────────────────────────
+if st.session_state.cam:
+    qk = f"q_{chosen}"
+    if qk not in st.session_state.questions:
+        st.session_state.questions[qk] = gen_q(
+            final_name, acountry, age_str, wins, losses, finals_c, total, recent_q
+        )
+    qs = st.session_state.questions[qk]
+
+    streak_h = ""
+    if s_n >= 2:
+        ico = "🔥" if s_type == "win" else "❄️"
+        lbl = f"Серия: {s_n} {'побед' if s_type=='win' else 'поражений'}"
+        cls = "sp-win" if s_type == "win" else "sp-loss"
+        streak_h = f'<span class="streak-pill {cls}">{ico} {lbl}</span>'
+
+    q_html = "".join(
+        f'<div class="cam-q"><div class="cam-qn">Вопрос {i+1}</div>'
+        f'<div class="cam-qt">{q}</div></div>'
+        for i, q in enumerate(qs)
+    )
     st.markdown(f"""
-    <table class="gold-table">
-      <thead><tr><th>Страна</th><th>Золото</th></tr></thead>
-      <tbody>{rows_html}</tbody>
-    </table>
+    <div class="cam-wrap">
+      <div class="cam-name">{final_name}</div>
+      <div class="cam-sub">{fl(acountry)} {cn(acountry)} · {dob_fmt} · {age_str}</div>
+      {streak_h}
+      <div class="cam-stats" style="margin-top:22px">
+        <div class="cam-s"><div class="cam-n w">{total}</div><div class="cam-sl">Боёв</div></div>
+        <div class="cam-s"><div class="cam-n g">{wins}</div><div class="cam-sl">Победы</div></div>
+        <div class="cam-s"><div class="cam-n r">{losses}</div><div class="cam-sl">Поражения</div></div>
+        <div class="cam-s"><div class="cam-n y">{winrate}%</div><div class="cam-sl">% побед</div></div>
+      </div>
+      {q_html}
+    </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("**Победители по весовым категориям**")
-    for cat in sorted(fin_matches['category_code'].unique()):
-        cat_df = fin_matches[fin_matches['category_code']==cat].sort_values('date_start', ascending=False)
-        with st.expander(get_cat(cat)):
-            for _, cr in cat_df.iterrows():
-                yr  = int(cr['date_start'].year) if pd.notna(cr['date_start']) else "????"
-                f   = get_flag(cr['w_country'])
-                st.markdown(f"**{yr}** &nbsp; {f} {cr['w_name']}", unsafe_allow_html=True)
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        if st.button("🔄 Другие вопросы", use_container_width=True):
+            st.session_state.questions[qk] = gen_q(
+                final_name, acountry, age_str, wins, losses, finals_c, total, recent_q
+            )
+            st.rerun()
+    with cc2:
+        if st.button("✖ Выйти из режима камеры", use_container_width=True):
+            st.session_state.cam = False; st.rerun()
+    st.stop()
 
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# ОБЫЧНЫЙ РЕЖИМ — ПРОФИЛЬ
+# ─────────────────────────────────────────────────────────────────────────────
+if len(athletes) > 1:
+    if st.button("← Другой атлет"):
+        st.session_state.sel = None; st.rerun()
+
+streak_h = ""
+if s_n >= 2:
+    ico = "🔥" if s_type == "win" else "❄️"
+    lbl = f"Серия: {s_n} {'побед' if s_type=='win' else 'поражений'} подряд"
+    cls = "sp-win" if s_type == "win" else "sp-loss"
+    streak_h = f'<div style="margin-top:10px"><span class="streak-pill {cls}">{ico} {lbl}</span></div>'
+
+meta = []
+if dob_fmt: meta.append(f"Дата рождения: {dob_fmt}")
+if age_str: meta.append(age_str)
+if main_cat: meta.append(main_cat)
+
+st.markdown(f"""
+<div class="profile-wrap">
+  <div class="avatar">{inits(final_name)}</div>
+  <div style="min-width:0;flex:1">
+    <div class="p-name">{final_name}</div>
+    <div class="p-country">{fl(acountry)} {cn(acountry)}</div>
+    <div class="p-sub">{"&nbsp;&nbsp;·&nbsp;&nbsp;".join(meta)}</div>
+    {streak_h}
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# статы
+st.markdown(f"""
+<div class="stat-grid">
+  <div class="sc"><div class="sc-l">Всего боёв</div><div class="sc-v">{total}</div></div>
+  <div class="sc"><div class="sc-l">Победы</div><div class="sc-v g">{wins}</div></div>
+  <div class="sc"><div class="sc-l">Поражения</div><div class="sc-v r">{losses}</div></div>
+  <div class="sc"><div class="sc-l">% побед</div><div class="sc-v y">{winrate}%</div></div>
+</div>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ВКЛАДКИ
+# ─────────────────────────────────────────────────────────────────────────────
+tab_m, tab_i, tab_w = st.tabs(["🥊 Матчи", "🎙 Интервью", "📖 Справка"])
+
+# ══════════════════════════  МАТЧИ  ══════════════════════════
+with tab_m:
+
+    # ── ФИЛЬТРЫ ──────────────────────────────────────────────
+    # Используем st.radio скрытый + HTML-визуал.
+    # st.radio надёжно хранит значение в session_state и НЕ сбрасывает sq.
+    FILTERS = ["Все", "Победы", "Поражения", "Финалы"]
+
+    # Рисуем HTML-чипы
+    chips_html = '<div class="filter-row">'
+    for opt in FILTERS:
+        cls = "f-chip on" if st.session_state.filter == opt else "f-chip"
+        chips_html += f'<span class="{cls}" id="fc_{opt}">{opt}</span>'
+    chips_html += '</div>'
+    st.markdown(chips_html, unsafe_allow_html=True)
+
+    # Невидимые кнопки под чипами — каждая занимает своё место
+    f_cols = st.columns(len(FILTERS))
+    for col, opt in zip(f_cols, FILTERS):
+        with col:
+            if st.button(opt, key=f"fb_{opt}", use_container_width=True,
+                         help=f"Показать: {opt}"):
+                st.session_state.filter = opt
+                st.rerun()
+
+    cur_year = None
+    shown    = 0
+    for _, row in matches.iterrows():
+        is_r = str(row.get('red_full_name',  '')).lower().strip() == chosen_low
+        wid  = str(row.get('winner_athlete_id', ''))
+        mid  = str(row.get('red_id', '') if is_r else row.get('blue_id', ''))
+        won  = (wid == mid and wid != '')
+        rc   = str(row.get('round_code', '')).upper()
+
+        if st.session_state.filter == "Победы"    and not won:           continue
+        if st.session_state.filter == "Поражения" and won:               continue
+        if st.session_state.filter == "Финалы"    and rc not in FINALS_CODES: continue
+
+        msc  = ci(row.get('red_score')  if is_r else row.get('blue_score'))
+        osc  = ci(row.get('blue_score') if is_r else row.get('red_score'))
+        mpen = ci(row.get('red_penalties')  if is_r else row.get('blue_penalties'))
+        open_= ci(row.get('blue_penalties') if is_r else row.get('red_penalties'))
+
+        opp_full = str(row['blue_full_name'] if is_r else row['red_full_name']).strip()
+        opp_last = str(row['blue_last_name'] if is_r else row['red_last_name']).strip()
+        opp_cnt  = str(row['blue_nationality_code'] if is_r else row['red_nationality_code'])
+        rl       = ROUND_MAP.get(rc, (0, rc))[1]
+        cat      = get_cat(row.get('category_code', ''))
+        ds       = row['date_start'].strftime('%d.%m.%Y') if pd.notna(row['date_start']) else '??'
+        yr       = row.get('year')
+        ts       = fmt_time(row.get('fight_time', 0))
+        cls      = "win" if won else "loss"
+        lbl      = "WIN" if won else "LOSS"
+
+        if pd.notna(yr) and int(yr) != cur_year:
+            cur_year = int(yr)
+            st.markdown(f'<div class="yr-sep">{cur_year}</div>', unsafe_allow_html=True)
+
+        tags = f'<span class="tag rnd">{rl}</span><span class="tag">{cat}</span>'
+        if mpen > 0 or open_ > 0:
+            tags += f'<span class="tag pen">Пред. {mpen} / {open_}</span>'
+
+        # флаг + страна соперника
+        opp_flag_country = (
+            f'<span style="font-size:16px">{fl(opp_cnt)}</span>'
+            f'<span class="m-cnt">{cn(opp_cnt)}</span>'
+        )
+
+        st.markdown(f"""
+        <div class="mc {cls}">
+          <div class="badge {cls}">
+            <span class="bs {cls}">{msc}:{osc}</span>
+            <span class="bl {cls}">{lbl}</span>
+          </div>
+          <div style="min-width:0;overflow:hidden">
+            <div class="m-tour">{str(row.get('tournament_name',''))}</div>
+            <div class="m-opp">{opp_flag_country}&nbsp;{opp_full}</div>
+            <div class="m-tags">{tags}</div>
+          </div>
+          <div class="m-right">
+            <div class="m-date">{ds}</div>
+            <div class="m-time">⏱ {ts}</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button(f"→ Досье: {opp_full}", key=f"ob_{row.name}"):
+            st.session_state.sq      = opp_last
+            st.session_state.prev_sq = opp_last
+            st.session_state.sel     = None
+            st.session_state.filter  = 'Все'
+            st.rerun()
+
+        shown += 1
+
+    if shown == 0:
+        st.markdown(
+            "<p style='color:#2a2d3d;text-align:center;padding:40px 0'>"
+            "Нет матчей по выбранному фильтру</p>",
+            unsafe_allow_html=True
+        )
+
+# ══════════════════════════  ИНТЕРВЬЮ  ══════════════════════════
+with tab_i:
+    st.markdown(f"#### 🎙 Блиц-интервью — {final_name}")
+    st.caption("Вопросы генерируются автоматически на основе данных карьеры")
+
+    qk = f"q_{chosen}"
+    if qk not in st.session_state.questions:
+        st.session_state.questions[qk] = gen_q(
+            final_name, acountry, age_str, wins, losses, finals_c, total, recent_q
+        )
+    qs = st.session_state.questions[qk]
+
+    for i, q in enumerate(qs):
+        st.markdown(
+            f'<div class="q-card">'
+            f'<div class="q-num">{i+1}</div>'
+            f'<div class="q-text">{q}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+    if st.button("🔄 Другие вопросы", key="rq_btn"):
+        st.session_state.questions[qk] = gen_q(
+            final_name, acountry, age_str, wins, losses, finals_c, total, recent_q
+        )
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("#### 💾 Записать ответы")
+    st.caption("Сохранится локально в interviews.json")
+
+    answers = []
+    for i, q in enumerate(qs):
+        a = st.text_area(
+            f"Ответ {i+1}",
+            key=f"ans_{i}_{chosen}",
+            placeholder=f"Ответ на: «{q[:55]}…»",
+            height=80
+        )
+        answers.append({"question": q, "answer": a})
+
+    if st.button("💾 Сохранить интервью", type="primary", key="save_btn"):
+        filled = [x for x in answers if x["answer"].strip()]
+        if filled:
+            now = datetime.now().strftime("%d.%m.%Y %H:%M")
+            save_ivw(final_name, now, answers)
+            st.success(f"✅ Сохранено — {now}")
+        else:
+            st.warning("Заполните хотя бы один ответ.")
+
+    past = load_ivw().get(final_name.strip().upper(), [])
+    if past:
+        st.markdown("---")
+        st.markdown(f"#### 📂 Прошлые интервью — {final_name}")
+        for ivw in reversed(past):
+            with st.expander(f"🗓 {ivw['date']}"):
+                for item in ivw['answers']:
+                    if item.get('answer', '').strip():
+                        st.markdown(f"**В:** {item['question']}")
+                        st.markdown(f"**О:** {item['answer']}")
+                        st.markdown("---")
+
+# ══════════════════════════  СПРАВКА  ══════════════════════════
+with tab_w:
+    st.markdown(f"#### 📖 Справка — {final_name}")
+
+    wiki = {}
+    for variant in [final_name, " ".join(reversed(final_name.split()))]:
+        wiki = wiki_get(variant)
+        if wiki: break
+
+    if wiki:
+        lng = "Wikipedia RU" if wiki.get("lang") == "ru" else "Wikipedia EN"
+        url_html = (
+            f"<a class='wiki-link' href='{wiki['url']}' target='_blank'>"
+            f"→ Читать полностью на Wikipedia</a>"
+        ) if wiki.get("url") else ""
+        st.markdown(
+            f'<div class="wiki-box">'
+            f'<div class="wiki-lbl">{lng} — {wiki["title"]}</div>'
+            f'<div class="wiki-text">{wiki["extract"]}</div>'
+            f'{url_html}</div>',
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f'<div class="wiki-box">'
+            f'<div class="wiki-lbl">Wikipedia</div>'
+            f'<div class="wiki-text" style="color:#2a2d3d">'
+            f'Статья о <b style="color:#3d4058">{final_name}</b> не найдена.<br>'
+            f'Возможно, страница ещё не создана.</div></div>',
+            unsafe_allow_html=True
+        )
+
+    ne = final_name.replace(' ', '+')
+    nt = final_name.replace(' ', '').lower()
+    st.markdown(
+        f'<div class="ref-grid">'
+        f'<a class="ref-a" href="https://www.google.com/search?q={ne}+самбо+sambo" target="_blank">🔍 Google</a>'
+        f'<a class="ref-a" href="https://ru.wikipedia.org/w/index.php?search={ne}" target="_blank">📖 Wikipedia</a>'
+        f'<a class="ref-a" href="https://www.youtube.com/results?search_query={ne}+sambo" target="_blank">▶ YouTube</a>'
+        f'<a class="ref-a" href="https://www.instagram.com/explore/tags/{nt}/" target="_blank">📷 Instagram</a>'
+        f'<a class="ref-a" href="https://t.me/search?query={ne}" target="_blank">✈ Telegram</a>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ПОДВАЛ
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 st.markdown(
-    "<hr style='border-color:#1e2029; margin-top:40px;'>"
-    "<p style='text-align:center; color:#2a2d3a; font-size:12px;'>FIGHTGURU · Мир самбо</p>",
-    unsafe_allow_html=True,
+    "<hr style='border-color:#111318;margin-top:50px'>"
+    "<p style='text-align:center;color:#1a1c28;font-size:11px;margin-top:8px'>"
+    "FightGuru v5 · Мир самбо</p>",
+    unsafe_allow_html=True
 )
