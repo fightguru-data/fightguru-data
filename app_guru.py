@@ -1529,7 +1529,7 @@ with tab_s:
 
   <div class="footer">
     <div style="display:flex;align-items:center;gap:10px">
-      {{_logo_html}}
+      {_logo_html}
       <div>
         <div class="brand">FIGHTGURU</div>
         <div class="brand-sub">Sambo Stats Portal</div>
