@@ -1515,30 +1515,38 @@ with tab_s:
 </body>
 </html>"""
 
-    # Кнопка скачивания HTML
-    st.download_button(
-        label="📲 Скачать карточку → открыть в Safari",
-        data=html_page.encode('utf-8'),
-        file_name=f"{final_name.replace(' ','_')}_story.html",
-        mime="text/html",
-        type="primary",
-        use_container_width=True,
-    )
+    # Показываем карточку прямо в приложении — Bebas Neue грузится в iframe
+    import streamlit.components.v1 as components
+    components.html(html_page, height=680, scrolling=False)
 
     st.markdown("""
     <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
     padding:14px 18px;margin-top:12px;line-height:1.9'>
     <div style='font-size:14px;font-weight:700;color:#f0f4ff;margin-bottom:8px'>
-      Как использовать на iPhone:
+      📲 Как сохранить на iPhone:
     </div>
     <div style='font-size:13px;color:#9093ab'>
-      1. Нажми <b style='color:#f0f4ff'>Скачать карточку</b><br>
-      2. Нажми <b style='color:#f0f4ff'>Ещё...</b> → выбери <b style='color:#f0f4ff'>Safari</b><br>
-      3. Карточка откроется с красивыми шрифтами Bebas Neue<br>
-      4. Сделай <b style='color:#f0f4ff'>скриншот</b> (боковая кнопка + громкость)<br>
-      5. В Фото обрежь до карточки<br>
-      6. Вставь фото бойца в <b style='color:#f0f4ff'>Canva</b> или Фотошоп<br>
-      7. Закидывай в сторис 🔥
+      1. Сделай <b style='color:#f0f4ff'>скриншот</b> — боковая кнопка + кнопка громкости<br>
+      2. Открой скриншот в Фото → нажми <b style='color:#f0f4ff'>Редактировать</b><br>
+      3. Обрежь — оставь только карточку<br>
+      4. Открой в <b style='color:#f0f4ff'>Canva</b> → вставь фото бойца поверх рамки<br>
+      5. Сохрани и закидывай в сторис 🔥
     </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Также даём прямую ссылку для открытия в браузере
+    import base64
+    b64 = base64.b64encode(html_page.encode()).decode()
+    data_url = f"data:text/html;base64,{b64}"
+    st.markdown(
+        f"""<a href="{data_url}" target="_blank"
+        style="display:block;text-align:center;
+               background:#161720;border:1px solid #2a2d45;
+               border-radius:12px;padding:12px;margin-top:10px;
+               font-size:14px;font-weight:700;color:#6090b8;
+               text-decoration:none">
+        🌐 Открыть карточку в новой вкладке браузера
+        </a>""",
+        unsafe_allow_html=True
+    )
