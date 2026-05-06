@@ -439,7 +439,7 @@ def gen_q(name, acnt, age, wins, losses, finals, total, recent):
               f"Какое поражение дало тебе больше всего?",
               f"{fn}, через что сейчас проходишь в карьере?"]
     else:
-        p2 = [f"{fn}, {wins} побед — какая самая памятная?",
+        p2 = [f"{fn}, {_wins} побед — какая самая памятная?",
               f"Что мотивирует продолжать выступать на таком уровне?",
               f"Опиши свой день на соревнованиях — от подъёма до ковра."]
     qs.append(random.choice(p2))
@@ -999,10 +999,10 @@ if st.session_state.cam:
       <div class="cam-sub">{fl(acountry)} {cn(acountry)} · {dob_fmt} · {age_str}</div>
       {streak_h}
       <div class="cam-stats" style="margin-top:20px">
-        <div class="cam-s"><div class="cam-n w">{total}</div><div class="cam-sl">Боёв</div></div>
-        <div class="cam-s"><div class="cam-n g">{wins}</div><div class="cam-sl">Победы</div></div>
-        <div class="cam-s"><div class="cam-n r">{losses}</div><div class="cam-sl">Пораж.</div></div>
-        <div class="cam-s"><div class="cam-n y">{winrate}%</div><div class="cam-sl">% побед</div></div>
+        <div class="cam-s"><div class="cam-n w">{_total}</div><div class="cam-sl">Боёв</div></div>
+        <div class="cam-s"><div class="cam-n g">{_wins}</div><div class="cam-sl">Победы</div></div>
+        <div class="cam-s"><div class="cam-n r">{_losses}</div><div class="cam-sl">Пораж.</div></div>
+        <div class="cam-s"><div class="cam-n y">{_winrate}%</div><div class="cam-sl">% побед</div></div>
       </div>
       {qhtml}
     </div>
@@ -1051,10 +1051,10 @@ st.markdown(f"""
 
 st.markdown(f"""
 <div class="stat-grid">
-  <div class="sc"><div class="sc-l">Боёв</div><div class="sc-v">{total}</div></div>
-  <div class="sc"><div class="sc-l">Победы</div><div class="sc-v g">{wins}</div></div>
-  <div class="sc"><div class="sc-l">Пораж.</div><div class="sc-v r">{losses}</div></div>
-  <div class="sc"><div class="sc-l">% побед</div><div class="sc-v y">{winrate}%</div></div>
+  <div class="sc"><div class="sc-l">Боёв</div><div class="sc-v">{_total}</div></div>
+  <div class="sc"><div class="sc-l">Победы</div><div class="sc-v g">{_wins}</div></div>
+  <div class="sc"><div class="sc-l">Пораж.</div><div class="sc-v r">{_losses}</div></div>
+  <div class="sc"><div class="sc-l">% побед</div><div class="sc-v y">{_winrate}%</div></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1227,11 +1227,84 @@ with tab_s:
     st.markdown("#### 📸 Карточка для сторис")
     st.caption("Открой в Safari → сделай скриншот → обрежь → в сторис")
 
+    # ── Определяем доступные дисциплины для этого атлета ─────────────────────
+    DISC_MAP = {
+        'SAM':  'Спортивное самбо',
+        'CSM':  'Боевое самбо',
+        'BSM':  'Пляжное самбо',
+    }
+
+    def get_disc(cat_code):
+        c = str(cat_code).upper()
+        if 'BSM' in c:  return 'BSM'
+        if 'CSM' in c:  return 'CSM'
+        if 'SAM' in c:  return 'SAM'
+        return None
+
+    # Собираем все дисциплины в которых выступал атлет
+    avail_discs = {}
+    for _, row in matches.iterrows():
+        cc   = str(row.get('category_code', '')).upper()
+        disc = get_disc(cc)
+        if disc and disc not in avail_discs:
+            avail_discs[disc] = DISC_MAP.get(disc, disc)
+
+    # Выбор дисциплины — только если больше одной
+    if len(avail_discs) > 1:
+        disc_options = list(avail_discs.values())
+        disc_keys    = list(avail_discs.keys())
+        sel_disc_name = st.radio(
+            "Дисциплина для карточки:",
+            disc_options,
+            horizontal=True,
+            key="story_disc"
+        )
+        sel_disc = disc_keys[disc_options.index(sel_disc_name)]
+    elif len(avail_discs) == 1:
+        sel_disc = list(avail_discs.keys())[0]
+    else:
+        sel_disc = None
+
+    # Фильтруем матчи по выбранной дисциплине
+    if sel_disc:
+        disc_matches = matches[
+            matches['category_code'].str.upper().str.contains(sel_disc, na=False)
+        ].copy()
+    else:
+        disc_matches = matches.copy()
+
+    if disc_matches.empty:
+        st.warning("Нет матчей по выбранной дисциплине.")
+        st.stop()
+
+    # Пересчитываем статистику только по выбранной дисциплине
+    disc_wins = disc_losses = disc_finals = 0
+    for _, row in disc_matches.iterrows():
+        is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
+        wid  = str(row.get('winner_athlete_id',''))
+        mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
+        won  = (wid == mid and wid != '')
+        if won: disc_wins += 1
+        else:   disc_losses += 1
+        if str(row.get('round_code','')).upper() in ('FNL','FIN'): disc_finals += 1
+
+    disc_total   = disc_wins + disc_losses
+    disc_winrate = round(disc_wins / disc_total * 100) if disc_total else 0
+
+    # Определяем главную категорию выбранной дисциплины
+    disc_cat_raw = ""
+    disc_cat     = ""
+    if not disc_matches.empty:
+        cc2 = disc_matches['category_code'].value_counts()
+        if not cc2.empty:
+            disc_cat_raw = str(cc2.index[0]).upper()
+            disc_cat     = get_cat(cc2.index[0])
+
     # ── Считаем статистику для карточки ──────────────────────────────────────
     fastest = "—"
     try:
         win_times = []
-        for _, row in matches.iterrows():
+        for _, row in disc_matches.iterrows():
             is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
             wid  = str(row.get('winner_athlete_id',''))
             mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
@@ -1248,7 +1321,7 @@ with tab_s:
     avg_score = "—"
     try:
         scores = []
-        for _, row in matches.iterrows():
+        for _, row in disc_matches.iterrows():
             is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
             sc = ci(row.get('red_score') if is_r else row.get('blue_score'))
             scores.append(sc)
@@ -1259,7 +1332,7 @@ with tab_s:
     try:
         # Берём год ПОСЛЕДНЕГО финала — неважно победил или нет
         # matches отсортированы по date_start DESC — первый финал = самый свежий
-        for _, row in matches.iterrows():
+        for _, row in disc_matches.iterrows():
             rc = str(row.get('round_code', '')).upper()
             if rc in ('FNL', 'FIN'):
                 ds = row.get('date_start')
@@ -1268,7 +1341,27 @@ with tab_s:
                     break
     except: pass
 
-    streak_n     = s_n if s_type == 'win' else 0
+    # Используем статистику по выбранной дисциплине
+    _wins     = disc_wins
+    _losses   = disc_losses
+    _total    = disc_total
+    _winrate  = disc_winrate
+    _finals_c = disc_finals
+    _main_cat = disc_cat
+
+    # Пересчитываем streak по выбранной дисциплине
+    _streak_n = 0
+    _win_seq2 = []
+    for _, row in disc_matches.iterrows():
+        is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
+        wid  = str(row.get('winner_athlete_id',''))
+        mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
+        _win_seq2.append(wid == mid and wid != '')
+    if _win_seq2 and _win_seq2[0]:
+        for w in _win_seq2:
+            if w: _streak_n += 1
+            else: break
+
     fname_parts  = final_name.strip().split()
     first_n      = fname_parts[0] if len(fname_parts) >= 2 else ""
     last_n       = " ".join(fname_parts[1:]) if len(fname_parts) >= 2 else final_name
@@ -1290,7 +1383,7 @@ with tab_s:
           <div style="display:flex;gap:6px">{dots}</div>
           <span style="font-family:'Bebas Neue',Impact,sans-serif;
                        font-size:22px;color:#2ecc71;letter-spacing:.1em">
-            {streak_n} WIN STREAK
+            {_streak_n} WIN STREAK
           </span>
         </div>"""
 
@@ -1394,7 +1487,7 @@ with tab_s:
   /* Зона фото */
   .photo-box {{
     width:150px; min-width:150px; flex-shrink:0;
-    background:#111122; border-left:3px solid #c0392b;
+    background:#111122; border-right:3px solid #c0392b;
     display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:10px;
   }}
@@ -1442,7 +1535,7 @@ with tab_s:
     font-weight:700; margin-bottom:6px;
   }}
   .track {{ height:5px; background:#1a1c28; border-radius:3px; overflow:hidden; }}
-  .fill  {{ height:100%; background:#2ecc71; border-radius:3px; width:{winrate}%; }}
+  .fill  {{ height:100%; background:#2ecc71; border-radius:3px; width:{_winrate}%; }}
 
   /* Доп статы */
   .extra {{
@@ -1488,31 +1581,31 @@ with tab_s:
 
 
   <div class="hero">
+    <div class="photo-box">
+      <div class="photo-circle">📷</div>
+      <div class="photo-hint">место<br>для фото</div>
+    </div>
     <div class="hero-info">
       <div class="f-first">{first_n}</div>
       <div class="f-last">{last_n[:-2]}<span>{last_n[-2:] if len(last_n)>=2 else last_n}</span></div>
       <div class="f-country">
         <span style="font-size:20px">{flag_emoji}</span>
         <span class="f-cname">{country_name}</span>
-        <span class="f-weight">{main_cat}</span>
+        <span class="f-weight">{_main_cat}</span>
       </div>
-    </div>
-    <div class="photo-box">
-      <div class="photo-circle">📷</div>
-      <div class="photo-hint">место<br>для фото</div>
     </div>
   </div>
 
   <div class="record">
-    <div class="rec"><div class="rval n">{total}</div><div class="rlbl">Боёв</div></div>
-    <div class="rec"><div class="rval w">{wins}</div><div class="rlbl">Победы</div></div>
-    <div class="rec"><div class="rval l">{losses}</div><div class="rlbl">Пораж.</div></div>
-    <div class="rec"><div class="rval y">{winrate}%</div><div class="rlbl">% побед</div></div>
+    <div class="rec"><div class="rval n">{_total}</div><div class="rlbl">Боёв</div></div>
+    <div class="rec"><div class="rval w">{_wins}</div><div class="rlbl">Победы</div></div>
+    <div class="rec"><div class="rval l">{_losses}</div><div class="rlbl">Пораж.</div></div>
+    <div class="rec"><div class="rval y">{_winrate}%</div><div class="rlbl">% побед</div></div>
   </div>
 
   <div class="pct-bar">
     <div class="pct-row">
-      <span style="color:#2ecc71">{wins} побед</span>
+      <span style="color:#2ecc71">{_wins} побед</span>
       <span style="color:#7880a0">FIAS · 2021–2026</span>
     </div>
     <div class="track"><div class="fill"></div></div>
@@ -1522,7 +1615,7 @@ with tab_s:
 
   <div class="extra">
     <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
-    <div class="ec"><div class="ev g">{finals_c}</div><div class="el">Финалы в карьере</div></div>
+    <div class="ec"><div class="ev g">{_finals_c}</div><div class="el">Финалы в карьере</div></div>
     <div class="ec"><div class="ev w">{avg_score}</div><div class="el">Ср. балл / бой</div></div>
     <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
   </div>
