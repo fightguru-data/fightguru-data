@@ -439,7 +439,7 @@ def gen_q(name, acnt, age, wins, losses, finals, total, recent):
               f"Какое поражение дало тебе больше всего?",
               f"{fn}, через что сейчас проходишь в карьере?"]
     else:
-        p2 = [f"{fn}, {_wins} побед — какая самая памятная?",
+        p2 = [f"{fn}, {wins} побед — какая самая памятная?",
               f"Что мотивирует продолжать выступать на таком уровне?",
               f"Опиши свой день на соревнованиях — от подъёма до ковра."]
     qs.append(random.choice(p2))
@@ -999,10 +999,10 @@ if st.session_state.cam:
       <div class="cam-sub">{fl(acountry)} {cn(acountry)} · {dob_fmt} · {age_str}</div>
       {streak_h}
       <div class="cam-stats" style="margin-top:20px">
-        <div class="cam-s"><div class="cam-n w">{_total}</div><div class="cam-sl">Боёв</div></div>
-        <div class="cam-s"><div class="cam-n g">{_wins}</div><div class="cam-sl">Победы</div></div>
-        <div class="cam-s"><div class="cam-n r">{_losses}</div><div class="cam-sl">Пораж.</div></div>
-        <div class="cam-s"><div class="cam-n y">{_winrate}%</div><div class="cam-sl">% побед</div></div>
+        <div class="cam-s"><div class="cam-n w">{total}</div><div class="cam-sl">Боёв</div></div>
+        <div class="cam-s"><div class="cam-n g">{wins}</div><div class="cam-sl">Победы</div></div>
+        <div class="cam-s"><div class="cam-n r">{losses}</div><div class="cam-sl">Пораж.</div></div>
+        <div class="cam-s"><div class="cam-n y">{winrate}%</div><div class="cam-sl">% побед</div></div>
       </div>
       {qhtml}
     </div>
@@ -1051,10 +1051,10 @@ st.markdown(f"""
 
 st.markdown(f"""
 <div class="stat-grid">
-  <div class="sc"><div class="sc-l">Боёв</div><div class="sc-v">{_total}</div></div>
-  <div class="sc"><div class="sc-l">Победы</div><div class="sc-v g">{_wins}</div></div>
-  <div class="sc"><div class="sc-l">Пораж.</div><div class="sc-v r">{_losses}</div></div>
-  <div class="sc"><div class="sc-l">% побед</div><div class="sc-v y">{_winrate}%</div></div>
+  <div class="sc"><div class="sc-l">Боёв</div><div class="sc-v">{total}</div></div>
+  <div class="sc"><div class="sc-l">Победы</div><div class="sc-v g">{wins}</div></div>
+  <div class="sc"><div class="sc-l">Пораж.</div><div class="sc-v r">{losses}</div></div>
+  <div class="sc"><div class="sc-l">% побед</div><div class="sc-v y">{winrate}%</div></div>
 </div>
 """, unsafe_allow_html=True)
 
