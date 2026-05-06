@@ -1389,24 +1389,26 @@ body{{background:#060608;display:flex;justify-content:center;padding:0;font-fami
 </body>
 </html>"""
 
-    # Кнопка скачивания
-    st.download_button(
-        label="⬇️ Скачать карточку (HTML)",
-        data=card_html.encode('utf-8'),
-        file_name=f"{final_name.replace(' ','_')}_story_card.html",
-        mime="text/html",
-        type="primary",
-        use_container_width=True,
-    )
+    # Показываем карточку прямо в приложении
+    import streamlit.components.v1 as components
+    components.html(card_html, height=700, scrolling=True)
 
     st.markdown("""
     <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
-    padding:14px 16px;margin-top:12px;font-size:13px;color:#9093ab;line-height:1.7'>
-    <b style='color:#f0f4ff'>Как использовать:</b><br>
-    1. Нажми <b style='color:#f0f4ff'>Скачать</b> — сохранится файл .html<br>
-    2. Открой файл в браузере на телефоне или компьютере<br>
-    3. Вставь фото бойца в Фотошопе вместо плейсхолдера<br>
-    4. Сделай скриншот карточки<br>
-    5. Закидывай в сторис 🔥
+    padding:14px 16px;margin-top:14px;font-size:13px;color:#9093ab;line-height:1.8'>
+    <b style='color:#f0f4ff'>Как использовать на iPhone:</b><br>
+    1. Сделай <b style='color:#f0f4ff'>скриншот экрана</b> с карточкой выше<br>
+    2. Обрежь в Фото — оставь только карточку<br>
+    3. Открой в <b style='color:#f0f4ff'>Фотошоп / Canva</b> → вставь фото бойца<br>
+    4. Закидывай в сторис 🔥
     </div>
     """, unsafe_allow_html=True)
+
+    # Также даём скачать для работы на компьютере
+    st.download_button(
+        label="⬇️ Скачать HTML (для компьютера)",
+        data=card_html.encode('utf-8'),
+        file_name=f"{final_name.replace(' ','_')}_story_card.html",
+        mime="text/html",
+        use_container_width=True,
+    )
