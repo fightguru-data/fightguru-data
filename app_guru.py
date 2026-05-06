@@ -1310,14 +1310,24 @@ with tab_s:
 
 
     # Логотип в base64 для футера карточки
+    # На Streamlit Cloud файлы из GitHub доступны относительно рабочей директории
     import base64 as _b64, os as _os
     _logo_b64 = ""
-    _logo_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png")
-    if _os.path.exists(_logo_path):
-        with open(_logo_path, "rb") as _lf:
-            _logo_b64 = _b64.b64encode(_lf.read()).decode()
+    # Пробуем несколько возможных путей
+    _logo_paths = [
+        "logo.png",                                          # рабочая директория
+        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png"),
+        _os.path.join(_os.getcwd(), "logo.png"),
+    ]
+    for _lp in _logo_paths:
+        if _os.path.exists(_lp):
+            with open(_lp, "rb") as _lf:
+                _logo_b64 = _b64.b64encode(_lf.read()).decode()
+            break
     _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
-    _logo_html = f'<img src="{_logo_src}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">' if _logo_src else '<div style="width:36px;height:36px;border-radius:50%;background:#c0392b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff">FG</div>'
+    _logo_html = (f'<img src="{_logo_src}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">' 
+                  if _logo_src else 
+                  '<div style="width:40px;height:40px;border-radius:50%;background:#c0392b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">FG</div>')
 
     # Полная HTML страница — открывается в браузере
     html_page = f"""<!DOCTYPE html>
