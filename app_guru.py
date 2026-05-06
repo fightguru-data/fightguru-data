@@ -1370,11 +1370,11 @@ with tab_s:
 
     # Streak dots
     streak_html = ""
-    if streak_n >= 2:
+    if _streak_n >= 2:
         dots = "".join(
             f'<div style="width:10px;height:10px;border-radius:50%;'
             f'background:#2ecc71;flex-shrink:0"></div>'
-            for _ in range(min(streak_n, 8))
+            for _ in range(min(_streak_n, 8))
         )
         streak_html = f"""
         <div style="padding:12px 24px;background:#071a0f;
@@ -1418,222 +1418,118 @@ with tab_s:
                   '<div style="width:40px;height:40px;border-radius:50%;background:#c0392b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">FG</div>')
 
     # Полная HTML страница — открывается в браузере
-    html_page = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
-<title>{final_name} — FightGuru</title>
-<style>
-  * {{ box-sizing:border-box; margin:0; padding:0; }}
-  html,body {{ background:#060608; min-height:100vh; display:flex;
-               justify-content:center; align-items:flex-start; padding:0; }}
-  .card {{
-    width:100%; max-width:480px;
-    background:#060608;
-    font-family:'Inter',sans-serif;
-  }}
-
-
-
-  /* Зона фото + имя */
-  .hero {{
-    display:flex; height:220px;
-    background:#0d0d18;
-    border-bottom:4px solid #c0392b;
-  }}
-  .hero-info {{
-    flex:1; display:flex; flex-direction:column;
-    justify-content:flex-end;
-    padding:0 16px 20px 24px; min-width:0;
-    overflow:hidden;
-  }}
-  .disc-tag {{
-    display:inline-block; background:#c0392b; color:#fff;
-    font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:14px; letter-spacing:.18em;
-    padding:3px 12px; margin-bottom:12px;
-  }}
-  .f-first {{
-    font-family:'Inter',sans-serif; font-size:13px;
-    font-weight:700; color:#6b6e85;
-    text-transform:uppercase; letter-spacing:.25em;
-    margin-bottom:2px;
-  }}
-  .f-last {{
-    font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:clamp(28px, 10vw, 54px); color:#fff;
-    letter-spacing:-.5px; line-height:.88;
-    white-space:nowrap; overflow:hidden;
-    text-overflow:clip;
-    margin-bottom:12px;
-  }}
-  .f-last span {{ color:#c0392b; }}
-  .f-country {{
-    display:flex; align-items:center; gap:8px;
-  }}
-  .f-cname {{
-    font-family:'Inter',sans-serif; font-size:12px;
-    font-weight:700; color:#9093ab;
-    text-transform:uppercase; letter-spacing:.1em;
-  }}
-  .f-weight {{
-    border:1px solid #2a2d45; padding:2px 9px;
-    font-family:'Inter',sans-serif; font-size:10px;
-    color:#52566e; letter-spacing:.07em;
-  }}
-
-  /* Зона фото */
-  .photo-box {{
-    width:150px; min-width:150px; flex-shrink:0;
-    background:#111122; border-right:3px solid #c0392b;
-    display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:10px;
-  }}
-  .photo-circle {{
-    width:72px; height:72px; border-radius:50%;
-    border:2px dashed #2a2d45;
-    display:flex; align-items:center; justify-content:center;
-    font-size:28px; opacity:.35;
-  }}
-  .photo-hint {{
-    font-family:'Inter',sans-serif; font-size:9px;
-    color:#2a2d45; text-transform:uppercase;
-    letter-spacing:.1em; text-align:center;
-  }}
-
-  /* Рекорд */
-  .record {{
-    display:grid; grid-template-columns:repeat(4,1fr);
-    border-bottom:1px solid #111;
-  }}
-  .rec {{
-    padding:14px 4px; text-align:center;
-    border-right:1px solid #111;
-  }}
-  .rec:last-child {{ border-right:none; }}
-  .rval {{
-    font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:42px; line-height:1; margin-bottom:5px;
-  }}
-  .rval.w {{ color:#2ecc71; }}
-  .rval.l {{ color:#c0392b; }}
-  .rval.n {{ color:#f0f4ff; }}
-  .rval.y {{ color:#f1c40f; }}
-  .rlbl {{
-    font-family:'Inter',sans-serif; font-size:9px;
-    font-weight:700; text-transform:uppercase;
-    letter-spacing:.12em; color:#9095b8;
-  }}
-
-  /* Полоса */
-  .pct-bar {{ padding:10px 24px 12px; border-bottom:1px solid #111; }}
-  .pct-row {{
-    display:flex; justify-content:space-between;
-    font-family:'Inter',sans-serif; font-size:10px;
-    font-weight:700; margin-bottom:6px;
-  }}
-  .track {{ height:5px; background:#1a1c28; border-radius:3px; overflow:hidden; }}
-  .fill  {{ height:100%; background:#2ecc71; border-radius:3px; width:{_winrate}%; }}
-
-  /* Доп статы */
-  .extra {{
-    display:grid; grid-template-columns:1fr 1fr;
-    gap:1px; background:#111; border-bottom:1px solid #111;
-  }}
-  .ec {{ background:#060608; padding:12px 14px; overflow:hidden; }}
-  .ev {{
-    font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:30px; line-height:1; margin-bottom:5px;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }}
-  .ev.r {{ color:#c0392b; }} .ev.g {{ color:#2ecc71; }}
-  .ev.w {{ color:#f0f4ff; }} .ev.y {{ color:#f1c40f; }}
-  .el {{
-    font-family:'Inter',sans-serif; font-size:9px;
-    font-weight:700; text-transform:uppercase;
-    letter-spacing:.12em; color:#9095b8;
-  }}
-
-  /* Футер */
-  .footer {{
-    padding:14px 24px;
-    display:flex; justify-content:space-between; align-items:center;
-  }}
-  .brand {{
-    font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:26px; color:#c0392b; letter-spacing:.15em;
-  }}
-  .brand-sub {{
-    font-family:'Inter',sans-serif; font-size:9px;
-    color:#252840; text-transform:uppercase; letter-spacing:.1em;
-  }}
-  .fias-txt {{
-    font-family:'Inter',sans-serif; font-size:9px;
-    color:#252840; text-transform:uppercase;
-    letter-spacing:.07em; text-align:right; line-height:1.6;
-  }}
-</style>
-</head>
-<body>
-<div class="card">
-
-
-  <div class="hero">
-    <div class="photo-box">
-      <div class="photo-circle">📷</div>
-      <div class="photo-hint">место<br>для фото</div>
-    </div>
-    <div class="hero-info">
-      <div class="f-first">{first_n}</div>
-      <div class="f-last">{last_n[:-2]}<span>{last_n[-2:] if len(last_n)>=2 else last_n}</span></div>
-      <div class="f-country">
-        <span style="font-size:20px">{flag_emoji}</span>
-        <span class="f-cname">{country_name}</span>
-        <span class="f-weight">{_main_cat}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="record">
-    <div class="rec"><div class="rval n">{_total}</div><div class="rlbl">Боёв</div></div>
-    <div class="rec"><div class="rval w">{_wins}</div><div class="rlbl">Победы</div></div>
-    <div class="rec"><div class="rval l">{_losses}</div><div class="rlbl">Пораж.</div></div>
-    <div class="rec"><div class="rval y">{_winrate}%</div><div class="rlbl">% побед</div></div>
-  </div>
-
-  <div class="pct-bar">
-    <div class="pct-row">
-      <span style="color:#2ecc71">{_wins} побед</span>
-      <span style="color:#7880a0">FIAS · 2021–2026</span>
-    </div>
-    <div class="track"><div class="fill"></div></div>
-  </div>
-
-  {streak_html}
-
-  <div class="extra">
-    <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
-    <div class="ec"><div class="ev g">{_finals_c}</div><div class="el">Финалы в карьере</div></div>
-    <div class="ec"><div class="ev w">{avg_score}</div><div class="el">Ср. балл / бой</div></div>
-    <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
-  </div>
-
-  <div class="footer">
-    <div style="display:flex;align-items:center;gap:10px">
-      {_logo_html}
-      <div>
-        <div class="brand">FIGHTGURU</div>
-        <div class="brand-sub">Sambo Stats Portal</div>
-      </div>
-    </div>
-    <div class="fias-txt">Официальная<br>статистика FIAS</div>
-  </div>
-
-</div>
-</body>
-</html>"""
+    _last_n_main = last_n[:-2] if len(last_n) >= 2 else last_n
+    _last_n_end  = last_n[-2:] if len(last_n) >= 2 else ""
+    html_page = (
+        "<!DOCTYPE html>\n"
+        "<html>\n<head>\n"
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">\n'
+        '<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">\n'
+        f"<title>{final_name} - FightGuru</title>\n"
+        "<style>\n"
+        "*{box-sizing:border-box;margin:0;padding:0}\n"
+        "html,body{background:#060608;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:0}\n"
+        ".card{width:100%;max-width:480px;background:#060608;font-family:Inter,sans-serif}\n"
+        ".hero{display:flex;height:220px;background:#0d0d18;border-bottom:4px solid #c0392b}\n"
+        ".photo-box{width:150px;min-width:150px;flex-shrink:0;background:#111122;border-right:3px solid #c0392b;"
+        "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}\n"
+        ".photo-circle{width:72px;height:72px;border-radius:50%;border:2px dashed #2a2d45;"
+        "display:flex;align-items:center;justify-content:center;font-size:28px;opacity:.35}\n"
+        ".photo-hint{font-family:Inter,sans-serif;font-size:9px;color:#2a2d45;"
+        "text-transform:uppercase;letter-spacing:.1em;text-align:center}\n"
+        ".hero-info{flex:1;display:flex;flex-direction:column;justify-content:flex-end;"
+        "padding:0 16px 20px 16px;min-width:0;overflow:hidden}\n"
+        ".f-first{font-family:Inter,sans-serif;font-size:13px;font-weight:700;color:#6b6e85;"
+        "text-transform:uppercase;letter-spacing:.25em;margin-bottom:2px}\n"
+        ".f-last{font-family:'Bebas Neue',Impact,sans-serif;"
+        "font-size:clamp(28px,10vw,54px);color:#fff;letter-spacing:-.5px;line-height:.88;"
+        "white-space:nowrap;overflow:hidden;text-overflow:clip;margin-bottom:12px}\n"
+        ".f-last span{color:#c0392b}\n"
+        ".f-country{display:flex;align-items:center;gap:8px}\n"
+        ".f-cname{font-family:Inter,sans-serif;font-size:12px;font-weight:700;color:#9093ab;"
+        "text-transform:uppercase;letter-spacing:.1em}\n"
+        ".f-weight{border:1px solid #2a2d45;padding:2px 9px;font-family:Inter,sans-serif;"
+        "font-size:10px;color:#52566e;letter-spacing:.07em}\n"
+        ".record{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #111}\n"
+        ".rec{padding:14px 4px;text-align:center;border-right:1px solid #111}\n"
+        ".rec:last-child{border-right:none}\n"
+        ".rval{font-family:'Bebas Neue',Impact,sans-serif;font-size:42px;line-height:1;margin-bottom:5px}\n"
+        ".rval.w{color:#2ecc71}.rval.l{color:#c0392b}.rval.n{color:#f0f4ff}.rval.y{color:#f1c40f}\n"
+        ".rlbl{font-family:Inter,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;"
+        "letter-spacing:.12em;color:#9095b8}\n"
+        ".pct-bar{padding:10px 24px 12px;border-bottom:1px solid #111}\n"
+        ".pct-row{display:flex;justify-content:space-between;font-family:Inter,sans-serif;"
+        "font-size:10px;font-weight:700;margin-bottom:6px}\n"
+        ".track{height:5px;background:#1a1c28;border-radius:3px;overflow:hidden}\n"
+        f".fill{{height:100%;background:#2ecc71;border-radius:3px;width:{_winrate}%}}\n"
+        ".streak-bar{padding:10px 16px;background:#071a0f;border-bottom:1px solid #111;"
+        "display:flex;align-items:center;gap:10px}\n"
+        ".streak-dots{display:flex;gap:5px}\n"
+        ".streak-dot{width:9px;height:9px;border-radius:50%;background:#2ecc71}\n"
+        ".streak-txt{font-family:'Bebas Neue',Impact,sans-serif;font-size:20px;"
+        "color:#2ecc71;letter-spacing:.1em}\n"
+        ".extra{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#111;border-bottom:1px solid #111}\n"
+        ".ec{background:#060608;padding:12px 14px;overflow:hidden}\n"
+        ".ev{font-family:'Bebas Neue',Impact,sans-serif;font-size:30px;line-height:1;"
+        "margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n"
+        ".ev.r{color:#c0392b}.ev.g{color:#2ecc71}.ev.w{color:#f0f4ff}.ev.y{color:#f1c40f}\n"
+        ".el{font-family:Inter,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;"
+        "letter-spacing:.12em;color:#9095b8}\n"
+        ".footer{padding:14px 24px;display:flex;justify-content:space-between;align-items:center}\n"
+        ".brand{font-family:'Bebas Neue',Impact,sans-serif;font-size:26px;color:#c0392b;letter-spacing:.15em}\n"
+        ".brand-sub{font-family:Inter,sans-serif;font-size:9px;color:#252840;"
+        "text-transform:uppercase;letter-spacing:.1em}\n"
+        ".fias-txt{font-family:Inter,sans-serif;font-size:9px;color:#252840;"
+        "text-transform:uppercase;letter-spacing:.07em;text-align:right;line-height:1.6}\n"
+        "</style>\n</head>\n<body>\n"
+        '<div class="card">\n'
+        '<div class="hero">\n'
+        '<div class="photo-box">'
+        '<div class="photo-circle">&#128247;</div>'
+        '<div class="photo-hint">&#x43C;&#x435;&#x441;&#x442;&#x43E;<br>&#x434;&#x43B;&#x44F; &#x444;&#x43E;&#x442;&#x43E;</div>'
+        '</div>\n'
+        '<div class="hero-info">\n'
+        f'<div class="f-first">{first_n}</div>\n'
+        f'<div class="f-last">{_last_n_main}<span>{_last_n_end}</span></div>\n'
+        '<div class="f-country">\n'
+        f'<span style="font-size:20px">{flag_emoji}</span>\n'
+        f'<span class="f-cname">{country_name}</span>\n'
+        f'<span class="f-weight">{_main_cat}</span>\n'
+        "</div></div></div>\n"
+        '<div class="record">\n'
+        f'<div class="rec"><div class="rval n">{_total}</div><div class="rlbl">&#x411;&#x43E;&#x451;&#x432;</div></div>\n'
+        f'<div class="rec"><div class="rval w">{_wins}</div><div class="rlbl">&#x41F;&#x43E;&#x431;&#x435;&#x434;&#x44B;</div></div>\n'
+        f'<div class="rec"><div class="rval l">{_losses}</div><div class="rlbl">&#x41F;&#x43E;&#x440;&#x430;&#x436;.</div></div>\n'
+        f'<div class="rec"><div class="rval y">{_winrate}%</div><div class="rlbl">% &#x43F;&#x43E;&#x431;&#x435;&#x434;</div></div>\n'
+        "</div>\n"
+        '<div class="pct-bar">\n'
+        '<div class="pct-row">\n'
+        f'<span style="color:#2ecc71">{_wins} &#x43F;&#x43E;&#x431;&#x435;&#x434;</span>\n'
+        '<span style="color:#7880a0">FIAS &middot; 2021&ndash;2026</span>\n'
+        "</div>\n"
+        '<div class="track"><div class="fill"></div></div>\n'
+        "</div>\n"
+        + (
+            f'<div class="streak-bar">'
+            f'<div class="streak-dots">{"<div class=\"streak-dot\"></div>" * min(_streak_n, 8)}</div>'
+            f'<span class="streak-txt">{_streak_n} WIN STREAK &#x1F525;</span>'
+            f'</div>\n'
+            if _streak_n >= 2 else ""
+        )
+        + '<div class="extra">\n'
+        f'<div class="ec"><div class="ev r">{fastest}</div><div class="el">&#x411;&#x44B;&#x441;&#x442;&#x440;&#x435;&#x439;&#x448;&#x430;&#x44F; &#x43F;&#x43E;&#x431;&#x435;&#x434;&#x430;</div></div>\n'
+        f'<div class="ec"><div class="ev g">{_finals_c}</div><div class="el">&#x424;&#x438;&#x43D;&#x430;&#x43B;&#x44B; &#x432; &#x43A;&#x430;&#x440;&#x44C;&#x435;&#x440;&#x435;</div></div>\n'
+        f'<div class="ec"><div class="ev w">{avg_score}</div><div class="el">&#x421;&#x440;. &#x431;&#x430;&#x43B;&#x43B; / &#x431;&#x43E;&#x439;</div></div>\n'
+        f'<div class="ec"><div class="ev y">{last_title_year}</div><div class="el">&#x41F;&#x43E;&#x441;&#x43B;&#x435;&#x434;&#x43D;&#x438;&#x439; &#x444;&#x438;&#x43D;&#x430;&#x43B;</div></div>\n'
+        "</div>\n"
+        '<div class="footer">\n'
+        f'<div style="display:flex;align-items:center;gap:10px">{_logo_html}\n'
+        '<div><div class="brand">FIGHTGURU</div>'
+        '<div class="brand-sub">Sambo Stats Portal</div></div></div>\n'
+        '<div class="fias-txt">&#x41E;&#x444;&#x438;&#x446;&#x438;&#x430;&#x43B;&#x44C;&#x43D;&#x430;&#x44F;<br>&#x441;&#x442;&#x430;&#x442;&#x438;&#x441;&#x442;&#x438;&#x43A;&#x430; FIAS</div>\n'
+        "</div>\n</div>\n</body>\n</html>"
+    )
 
     # Показываем карточку через components.html
     # Bebas Neue теперь в основном CSS приложения и кэшируется браузером
