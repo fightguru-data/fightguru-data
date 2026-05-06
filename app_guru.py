@@ -1272,7 +1272,6 @@ with tab_s:
     fname_parts  = final_name.strip().split()
     first_n      = fname_parts[0] if len(fname_parts) >= 2 else ""
     last_n       = " ".join(fname_parts[1:]) if len(fname_parts) >= 2 else final_name
-    discipline   = "Боевое самбо" if "CSM" in main_cat_raw else "Спортивное самбо"
     flag_emoji   = fl(acountry)
     country_name = cn(acountry)
 
@@ -1313,12 +1312,7 @@ with tab_s:
     font-family:'Inter',sans-serif;
   }}
 
-  /* Красная верхняя полоса */
-  .top-stripe {{
-    background:#c0392b; padding:9px 24px;
-    font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:18px; color:#fff; letter-spacing:.2em;
-  }}
+
 
   /* Зона фото + имя */
   .hero {{
@@ -1461,7 +1455,6 @@ with tab_s:
 <body>
 <div class="card">
 
-  <div class="top-stripe">{discipline}</div>
 
   <div class="hero">
     <div class="hero-info">
@@ -1515,18 +1508,10 @@ with tab_s:
 </body>
 </html>"""
 
-    # Показываем карточку через st.markdown — шрифты из основного CSS работают
-    # Извлекаем только <body> из html_page для вставки в DOM
-    import re as _re
-    body_match = _re.search(r'<body>(.*?)</body>', html_page, _re.DOTALL)
-    card_body  = body_match.group(1) if body_match else ""
-    style_match = _re.search(r'<style>(.*?)</style>', html_page, _re.DOTALL)
-    card_style  = style_match.group(1) if style_match else ""
-
-    st.markdown(
-        f"<style>{card_style}</style>{card_body}",
-        unsafe_allow_html=True
-    )
+    # Показываем карточку через components.html
+    # Bebas Neue теперь в основном CSS приложения и кэшируется браузером
+    import streamlit.components.v1 as components
+    components.html(html_page, height=660, scrolling=False)
 
     st.markdown("""
     <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
