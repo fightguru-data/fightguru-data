@@ -1257,29 +1257,28 @@ with tab_s:
 
     last_title_year = "—"
     try:
-        # matches уже отсортированы по дате DESC — берём первый финал (победный)
-        finals_won = matches[
-            matches['round_code'].str.upper().isin(['FNL','FIN','SFL','QFL'])
-        ].copy()
-        for _, row in finals_won.iterrows():
+        # matches отсортированы по date_start DESC
+        # Ищем самый свежий финал где атлет ПОБЕДИЛ
+        for _, row in matches.iterrows():
+            rc  = str(row.get('round_code', '')).upper()
+            if rc not in ('FNL', 'FIN'):
+                continue
             is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
-            wid  = str(row.get('winner_athlete_id',''))
-            mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
-            rc   = str(row.get('round_code','')).upper()
-            # Берём год ЛЮБОГО финала (FNL/FIN) где атлет победил
-            if wid == mid and wid != '' and rc in ('FNL','FIN'):
-                yr = row.get('year')
-                if pd.notna(yr):
-                    last_title_year = str(int(yr))
+            wid  = str(row.get('winner_athlete_id', ''))
+            mid  = str(row.get('red_id', '') if is_r else row.get('blue_id', ''))
+            if wid == mid and wid != '':
+                ds = row.get('date_start')
+                if pd.notna(ds):
+                    last_title_year = str(pd.to_datetime(ds).year)
                     break
-        # Если не нашли победный финал — берём год последнего финала в котором участвовал
+        # Если нет победного финала — год последнего финала вообще
         if last_title_year == "—":
             for _, row in matches.iterrows():
-                rc = str(row.get('round_code','')).upper()
-                if rc in ('FNL','FIN'):
-                    yr = row.get('year')
-                    if pd.notna(yr):
-                        last_title_year = str(int(yr))
+                rc = str(row.get('round_code', '')).upper()
+                if rc in ('FNL', 'FIN'):
+                    ds = row.get('date_start')
+                    if pd.notna(ds):
+                        last_title_year = str(pd.to_datetime(ds).year)
                         break
     except: pass
 
@@ -1366,7 +1365,7 @@ with tab_s:
   }}
   .f-last {{
     font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:58px; color:#fff;
+    font-size:clamp(28px, 10vw, 54px); color:#fff;
     letter-spacing:-.5px; line-height:.88;
     white-space:nowrap; overflow:hidden;
     text-overflow:clip;
@@ -1389,7 +1388,7 @@ with tab_s:
 
   /* Зона фото */
   .photo-box {{
-    width:140px; flex-shrink:0;
+    width:150px; min-width:150px; flex-shrink:0;
     background:#111122; border-left:3px solid #c0392b;
     display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:10px;
@@ -1445,10 +1444,11 @@ with tab_s:
     display:grid; grid-template-columns:1fr 1fr;
     gap:1px; background:#111; border-bottom:1px solid #111;
   }}
-  .ec {{ background:#060608; padding:14px 20px; }}
+  .ec {{ background:#060608; padding:12px 14px; overflow:hidden; }}
   .ev {{
     font-family:'Bebas Neue',Impact,sans-serif;
-    font-size:34px; line-height:1; margin-bottom:5px;
+    font-size:30px; line-height:1; margin-bottom:5px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }}
   .ev.r {{ color:#c0392b; }} .ev.g {{ color:#2ecc71; }}
   .ev.w {{ color:#f0f4ff; }} .ev.y {{ color:#f1c40f; }}
