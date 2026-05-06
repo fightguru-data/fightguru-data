@@ -1056,7 +1056,7 @@ st.markdown(f"""
 # ─────────────────────────────────────────────────────────────────────────────
 # ВКЛАДКИ
 # ─────────────────────────────────────────────────────────────────────────────
-tab_m, tab_i, tab_w = st.tabs(["🥊 Матчи","🎙 Интервью","📖 Справка"])
+tab_m, tab_i, tab_w, tab_s = st.tabs(["🥊 Матчи","🎙 Интервью","📖 Справка","📸 Сторис"])
 
 # ═══════════════  МАТЧИ  ═══════════════
 with tab_m:
@@ -1215,3 +1215,198 @@ with tab_w:
 st.markdown("<hr style='border-color:#111318;margin-top:50px'>"
             "<p style='text-align:center;color:#1a1c28;font-size:11px'>FightGuru v5</p>",
             unsafe_allow_html=True)
+
+
+# ═══════════════  СТОРИС  ═══════════════
+with tab_s:
+    st.markdown("#### 📸 Карточка для сторис")
+    st.caption("Скачай HTML → открой в браузере → сделай скриншот → в сторис")
+
+    # Считаем быстрейшую победу
+    fastest = "—"
+    try:
+        win_rows = []
+        for _, row in matches.iterrows():
+            is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
+            wid  = str(row.get('winner_athlete_id',''))
+            mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
+            if wid == mid and wid != '':
+                ft = row.get('fight_time', 0)
+                try:
+                    ms = int(float(ft))
+                    if ms > 0:
+                        win_rows.append(ms)
+                except: pass
+        if win_rows:
+            fastest_ms = min(win_rows)
+            ts = fastest_ms // 1000
+            fastest = f"{ts//60}:{ts%60:02d}"
+    except: pass
+
+    # Средний балл за бой
+    avg_score = "—"
+    try:
+        scores = []
+        for _, row in matches.iterrows():
+            is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
+            sc = ci(row.get('red_score') if is_r else row.get('blue_score'))
+            scores.append(sc)
+        if scores:
+            avg_score = f"{sum(scores)/len(scores):.1f}"
+    except: pass
+
+    # Последний титул (финал победный)
+    last_title_year = "—"
+    try:
+        for _, row in matches.iterrows():
+            is_r = str(row.get('red_full_name','')) .lower().strip() == chosen_low
+            wid  = str(row.get('winner_athlete_id',''))
+            mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
+            rc   = str(row.get('round_code','')).upper()
+            if wid == mid and wid != '' and rc in ('FNL','FIN'):
+                yr = row.get('year')
+                if pd.notna(yr):
+                    last_title_year = str(int(yr))
+                    break
+    except: pass
+
+    # Серия побед
+    streak_n = s_n if s_type == 'win' else 0
+
+    # Данные для карточки
+    fname_parts = final_name.strip().split()
+    first_n = fname_parts[0] if len(fname_parts) >= 2 else ""
+    last_n  = fname_parts[-1] if fname_parts else final_name
+
+    discipline = "Боевое самбо" if "CSM" in str(main_cat).upper() else "Спортивное самбо"
+
+    # Генерируем HTML карточку
+    streak_dots = "".join(
+        '<div style="width:8px;height:8px;border-radius:50%;background:#2ecc71"></div>'
+        for _ in range(min(streak_n, 8))
+    )
+
+    card_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#060608;display:flex;justify-content:center;padding:0;font-family:'Inter',sans-serif}}
+.card{{width:400px;background:#060608;overflow:hidden;position:relative}}
+.photo-zone{{position:relative;height:280px;background:#0d0d18;overflow:hidden}}
+.stripe1{{position:absolute;top:-20px;right:-10px;width:200px;height:360px;background:#c0392b;transform:skewX(-12deg);opacity:.08}}
+.stripe2{{position:absolute;top:-20px;right:34px;width:4px;height:360px;background:#c0392b;transform:skewX(-12deg);opacity:.6}}
+.photo-area{{position:absolute;right:20px;bottom:0;width:200px;height:260px;display:flex;align-items:flex-end;justify-content:center}}
+.photo-box{{width:180px;height:250px;border:1.5px dashed #2a2d45;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#0d0d18}}
+.photo-hint{{font-size:11px;color:#2a2d45;text-transform:uppercase;letter-spacing:.1em}}
+.top-left{{position:absolute;top:16px;left:16px;z-index:10}}
+.disc-tag{{display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;padding:5px 12px}}
+.name-block{{position:absolute;bottom:0;left:0;right:0;padding:0 16px 14px;background:linear-gradient(to top,#060608 55%,transparent);z-index:10}}
+.first-name{{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#6b6e85;letter-spacing:.25em;line-height:1;text-transform:uppercase}}
+.last-name{{font-family:'Bebas Neue',sans-serif;font-size:58px;color:#fff;letter-spacing:.04em;line-height:.9;text-transform:uppercase}}
+.last-name span{{color:#c0392b}}
+.country-row{{display:flex;align-items:center;gap:7px;margin-top:7px}}
+.country-name{{font-size:12px;font-weight:700;color:#9093ab;text-transform:uppercase;letter-spacing:.1em}}
+.weight-pill{{margin-left:auto;background:#0d0d18;border:1px solid #2a2d45;padding:3px 10px;font-size:11px;font-weight:700;color:#9093ab;text-transform:uppercase;letter-spacing:.08em}}
+.divider{{height:3px;background:#c0392b}}
+.record-block{{padding:16px;display:flex;gap:0;border-bottom:1px solid #111118}}
+.rec-item{{flex:1;text-align:center;position:relative}}
+.rec-item+.rec-item::before{{content:'';position:absolute;left:0;top:15%;height:70%;width:1px;background:#1a1c28}}
+.rec-num{{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:1;margin-bottom:3px}}
+.rec-num.w{{color:#2ecc71}}.rec-num.l{{color:#c0392b}}.rec-num.t{{color:#f0f4ff}}.rec-num.y{{color:#f1c40f}}
+.rec-label{{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#3d4058}}
+.pct-block{{padding:10px 16px 13px;border-bottom:1px solid #111118}}
+.pct-row{{display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:6px}}
+.pct-track{{height:4px;background:#1a1c28;border-radius:2px;overflow:hidden}}
+.pct-fill{{height:100%;background:#2ecc71;border-radius:2px;width:{winrate}%}}
+.streak-bar{{padding:10px 16px;display:flex;align-items:center;gap:10px;background:#071a0f;border-bottom:1px solid #111118}}
+.streak-dots{{display:flex;gap:4px}}
+.streak-text{{font-size:11px;font-weight:700;color:#2ecc71;text-transform:uppercase;letter-spacing:.1em}}
+.streak-num{{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#2ecc71;margin-left:auto;letter-spacing:.05em}}
+.stats-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:#111118;border-bottom:1px solid #111118}}
+.sg-cell{{background:#060608;padding:12px 16px}}
+.sg-val{{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#f0f4ff;line-height:1;letter-spacing:.02em}}
+.sg-val.accent{{color:#c0392b}}.sg-val.green{{color:#2ecc71}}.sg-val.gold{{color:#f1c40f}}
+.sg-label{{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#3d4058;margin-top:3px}}
+.footer{{padding:12px 16px;display:flex;align-items:center;justify-content:space-between}}
+.brand{{font-family:'Bebas Neue',sans-serif;font-size:22px;color:#c0392b;letter-spacing:.15em}}
+.brand-sub{{font-size:9px;color:#2a2d40;text-transform:uppercase;letter-spacing:.1em;margin-top:-2px}}
+.fias-badge{{font-size:9px;color:#2a2d40;text-transform:uppercase;letter-spacing:.08em;text-align:right;line-height:1.5}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="photo-zone">
+    <div class="stripe1"></div>
+    <div class="stripe2"></div>
+    <div class="top-left"><div class="disc-tag">{discipline}</div></div>
+    <div class="photo-area">
+      <div class="photo-box">
+        <div style="font-size:36px;opacity:.2">📷</div>
+        <div class="photo-hint">Вставьте фото</div>
+      </div>
+    </div>
+    <div class="name-block">
+      <div class="first-name">{first_n}</div>
+      <div class="last-name">{last_n[:-2]}<span>{last_n[-2:]}</span></div>
+      <div class="country-row">
+        <span style="font-size:20px">{fl(acountry)}</span>
+        <span class="country-name">{cn(acountry)}</span>
+        <span class="weight-pill">{main_cat}</span>
+      </div>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="record-block">
+    <div class="rec-item"><div class="rec-num t">{total}</div><div class="rec-label">Боёв</div></div>
+    <div class="rec-item"><div class="rec-num w">{wins}</div><div class="rec-label">Победы</div></div>
+    <div class="rec-item"><div class="rec-num l">{losses}</div><div class="rec-label">Поражения</div></div>
+    <div class="rec-item"><div class="rec-num y">{winrate}%</div><div class="rec-label">% побед</div></div>
+  </div>
+  <div class="pct-block">
+    <div class="pct-row">
+      <span style="color:#2ecc71">{wins} побед</span>
+      <span style="color:#3d4058">Статистика FIAS · 2021–2026</span>
+    </div>
+    <div class="pct-track"><div class="pct-fill"></div></div>
+  </div>
+  {"" if streak_n < 2 else f'<div class="streak-bar"><div class="streak-dots">{streak_dots}</div><span class="streak-text">Серия побед подряд</span><span class="streak-num">{streak_n} WIN STREAK</span></div>'}
+  <div class="stats-grid">
+    <div class="sg-cell"><div class="sg-val accent">{fastest}</div><div class="sg-label">Быстрейшая победа</div></div>
+    <div class="sg-cell"><div class="sg-val green">{finals_c}</div><div class="sg-label">Финалы в карьере</div></div>
+    <div class="sg-cell"><div class="sg-val">{avg_score}</div><div class="sg-label">Ср. балл / бой</div></div>
+    <div class="sg-cell"><div class="sg-val gold">{last_title_year}</div><div class="sg-label">Год последнего финала</div></div>
+  </div>
+  <div class="footer">
+    <div><div class="brand">FIGHTGURU</div><div class="brand-sub">sambo stats portal</div></div>
+    <div class="fias-badge">Официальная статистика<br>FIAS · 2021–2026</div>
+  </div>
+</div>
+</body>
+</html>"""
+
+    # Кнопка скачивания
+    st.download_button(
+        label="⬇️ Скачать карточку (HTML)",
+        data=card_html.encode('utf-8'),
+        file_name=f"{final_name.replace(' ','_')}_story_card.html",
+        mime="text/html",
+        type="primary",
+        use_container_width=True,
+    )
+
+    st.markdown("""
+    <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
+    padding:14px 16px;margin-top:12px;font-size:13px;color:#9093ab;line-height:1.7'>
+    <b style='color:#f0f4ff'>Как использовать:</b><br>
+    1. Нажми <b style='color:#f0f4ff'>Скачать</b> — сохранится файл .html<br>
+    2. Открой файл в браузере на телефоне или компьютере<br>
+    3. Вставь фото бойца в Фотошопе вместо плейсхолдера<br>
+    4. Сделай скриншот карточки<br>
+    5. Закидывай в сторис 🔥
+    </div>
+    """, unsafe_allow_html=True)
