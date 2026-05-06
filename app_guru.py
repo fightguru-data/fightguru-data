@@ -1257,15 +1257,30 @@ with tab_s:
 
     last_title_year = "—"
     try:
-        for _, row in matches.iterrows():
+        # matches уже отсортированы по дате DESC — берём первый финал (победный)
+        finals_won = matches[
+            matches['round_code'].str.upper().isin(['FNL','FIN','SFL','QFL'])
+        ].copy()
+        for _, row in finals_won.iterrows():
             is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
             wid  = str(row.get('winner_athlete_id',''))
             mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
             rc   = str(row.get('round_code','')).upper()
+            # Берём год ЛЮБОГО финала (FNL/FIN) где атлет победил
             if wid == mid and wid != '' and rc in ('FNL','FIN'):
                 yr = row.get('year')
                 if pd.notna(yr):
-                    last_title_year = str(int(yr)); break
+                    last_title_year = str(int(yr))
+                    break
+        # Если не нашли победный финал — берём год последнего финала в котором участвовал
+        if last_title_year == "—":
+            for _, row in matches.iterrows():
+                rc = str(row.get('round_code','')).upper()
+                if rc in ('FNL','FIN'):
+                    yr = row.get('year')
+                    if pd.notna(yr):
+                        last_title_year = str(int(yr))
+                        break
     except: pass
 
     streak_n     = s_n if s_type == 'win' else 0
@@ -1293,6 +1308,17 @@ with tab_s:
             {streak_n} WIN STREAK
           </span>
         </div>"""
+
+
+    # Логотип в base64 для футера карточки
+    import base64 as _b64, os as _os
+    _logo_b64 = ""
+    _logo_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png")
+    if _os.path.exists(_logo_path):
+        with open(_logo_path, "rb") as _lf:
+            _logo_b64 = _b64.b64encode(_lf.read()).decode()
+    _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
+    _logo_html = f'<img src="{_logo_src}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">' if _logo_src else '<div style="width:36px;height:36px;border-radius:50%;background:#c0392b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff">FG</div>'
 
     # Полная HTML страница — открывается в браузере
     html_page = f"""<!DOCTYPE html>
@@ -1401,7 +1427,7 @@ with tab_s:
   .rlbl {{
     font-family:'Inter',sans-serif; font-size:9px;
     font-weight:700; text-transform:uppercase;
-    letter-spacing:.12em; color:#3d4058;
+    letter-spacing:.12em; color:#9095b8;
   }}
 
   /* Полоса */
@@ -1429,7 +1455,7 @@ with tab_s:
   .el {{
     font-family:'Inter',sans-serif; font-size:9px;
     font-weight:700; text-transform:uppercase;
-    letter-spacing:.12em; color:#3d4058;
+    letter-spacing:.12em; color:#9095b8;
   }}
 
   /* Футер */
@@ -1482,7 +1508,7 @@ with tab_s:
   <div class="pct-bar">
     <div class="pct-row">
       <span style="color:#2ecc71">{wins} побед</span>
-      <span style="color:#3d4058">FIAS · 2021–2026</span>
+      <span style="color:#7880a0">FIAS · 2021–2026</span>
     </div>
     <div class="track"><div class="fill"></div></div>
   </div>
@@ -1497,9 +1523,12 @@ with tab_s:
   </div>
 
   <div class="footer">
-    <div>
-      <div class="brand">FIGHTGURU</div>
-      <div class="brand-sub">Sambo Stats Portal</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      {{_logo_html}}
+      <div>
+        <div class="brand">FIGHTGURU</div>
+        <div class="brand-sub">Sambo Stats Portal</div>
+      </div>
     </div>
     <div class="fias-txt">Официальная<br>статистика FIAS</div>
   </div>
@@ -1528,19 +1557,3 @@ with tab_s:
     </div>
     </div>
     """, unsafe_allow_html=True)
-
-    # Также даём прямую ссылку для открытия в браузере
-    import base64
-    b64 = base64.b64encode(html_page.encode()).decode()
-    data_url = f"data:text/html;base64,{b64}"
-    st.markdown(
-        f"""<a href="{data_url}" target="_blank"
-        style="display:block;text-align:center;
-               background:#161720;border:1px solid #2a2d45;
-               border-radius:12px;padding:12px;margin-top:10px;
-               font-size:14px;font-weight:700;color:#6090b8;
-               text-decoration:none">
-        🌐 Открыть карточку в новой вкладке браузера
-        </a>""",
-        unsafe_allow_html=True
-    )
