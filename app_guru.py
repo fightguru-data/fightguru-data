@@ -1257,29 +1257,15 @@ with tab_s:
 
     last_title_year = "—"
     try:
-        # matches отсортированы по date_start DESC
-        # Ищем самый свежий финал где атлет ПОБЕДИЛ
+        # Берём год ПОСЛЕДНЕГО финала — неважно победил или нет
+        # matches отсортированы по date_start DESC — первый финал = самый свежий
         for _, row in matches.iterrows():
-            rc  = str(row.get('round_code', '')).upper()
-            if rc not in ('FNL', 'FIN'):
-                continue
-            is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
-            wid  = str(row.get('winner_athlete_id', ''))
-            mid  = str(row.get('red_id', '') if is_r else row.get('blue_id', ''))
-            if wid == mid and wid != '':
+            rc = str(row.get('round_code', '')).upper()
+            if rc in ('FNL', 'FIN'):
                 ds = row.get('date_start')
                 if pd.notna(ds):
                     last_title_year = str(pd.to_datetime(ds).year)
                     break
-        # Если нет победного финала — год последнего финала вообще
-        if last_title_year == "—":
-            for _, row in matches.iterrows():
-                rc = str(row.get('round_code', '')).upper()
-                if rc in ('FNL', 'FIN'):
-                    ds = row.get('date_start')
-                    if pd.notna(ds):
-                        last_title_year = str(pd.to_datetime(ds).year)
-                        break
     except: pass
 
     streak_n     = s_n if s_type == 'win' else 0
@@ -1320,10 +1306,19 @@ with tab_s:
         _os.path.join(_os.getcwd(), "logo.png"),
     ]
     for _lp in _logo_paths:
-        if _os.path.exists(_lp):
-            with open(_lp, "rb") as _lf:
+        try:
+            if _os.path.exists(_lp):
+                with open(_lp, "rb") as _lf:
+                    _logo_b64 = _b64.b64encode(_lf.read()).decode()
+                break
+        except: pass
+    # Если всё ещё не нашли — попробуем glob
+    if not _logo_b64:
+        import glob as _glob
+        found = _glob.glob("**/logo.png", recursive=True)
+        if found:
+            with open(found[0], "rb") as _lf:
                 _logo_b64 = _b64.b64encode(_lf.read()).decode()
-            break
     _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
     _logo_html = (f'<img src="{_logo_src}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">' 
                   if _logo_src else 
@@ -1529,7 +1524,7 @@ with tab_s:
     <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
     <div class="ec"><div class="ev g">{finals_c}</div><div class="el">Финалы в карьере</div></div>
     <div class="ec"><div class="ev w">{avg_score}</div><div class="el">Ср. балл / бой</div></div>
-    <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Год посл. финала</div></div>
+    <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
   </div>
 
   <div class="footer">
