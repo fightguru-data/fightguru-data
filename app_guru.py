@@ -966,10 +966,12 @@ if win_seq:
         if (w and s_type=="win") or (not w and s_type=="loss"): s_n+=1
         else: break
 
-main_cat=""
+main_cat=""; main_cat_raw=""
 if 'category_code' in matches.columns:
     cc = matches['category_code'].value_counts()
-    if not cc.empty: main_cat = get_cat(cc.index[0])
+    if not cc.empty:
+        main_cat_raw = str(cc.index[0]).upper()   # исходный код: CSMM, SAMM и т.д.
+        main_cat     = get_cat(cc.index[0])        # отформатированный: "Боевое М 71кг"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # РЕЖИМ КАМЕРЫ
@@ -1278,7 +1280,7 @@ with tab_s:
     first_n = fname_parts[0] if len(fname_parts) >= 2 else ""
     last_n  = fname_parts[-1] if fname_parts else final_name
 
-    discipline = "Боевое самбо" if "CSM" in str(main_cat).upper() else "Спортивное самбо"
+    discipline = "Боевое самбо" if "CSM" in main_cat_raw else "Спортивное самбо"
 
     # Генерируем HTML карточку
     streak_dots = "".join(
@@ -1389,26 +1391,192 @@ body{{background:#060608;display:flex;justify-content:center;padding:0;font-fami
 </body>
 </html>"""
 
-    # Показываем карточку прямо в приложении
+    # Показываем превью карточки в приложении
     import streamlit.components.v1 as components
-    components.html(card_html, height=700, scrolling=True)
+    components.html(card_html, height=720, scrolling=False)
 
-    st.markdown("""
-    <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
-    padding:14px 16px;margin-top:14px;font-size:13px;color:#9093ab;line-height:1.8'>
-    <b style='color:#f0f4ff'>Как использовать на iPhone:</b><br>
-    1. Сделай <b style='color:#f0f4ff'>скриншот экрана</b> с карточкой выше<br>
-    2. Обрежь в Фото — оставь только карточку<br>
-    3. Открой в <b style='color:#f0f4ff'>Фотошоп / Canva</b> → вставь фото бойца<br>
-    4. Закидывай в сторис 🔥
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-    # Также даём скачать для работы на компьютере
-    st.download_button(
-        label="⬇️ Скачать HTML (для компьютера)",
-        data=card_html.encode('utf-8'),
-        file_name=f"{final_name.replace(' ','_')}_story_card.html",
-        mime="text/html",
-        use_container_width=True,
-    )
+    # Генерируем PNG через Pillow (размер Instagram Stories: 1080x1920)
+    png_data = None
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+
+        W, H = 1080, 1920
+        img = Image.new("RGB", (W, H), color="#060608")
+        draw = ImageDraw.Draw(img)
+
+        # Пытаемся загрузить шрифт, fallback на default
+        try:
+            font_big   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120)
+            font_med   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 70)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 45)
+            font_tiny  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
+        except:
+            font_big   = ImageFont.load_default()
+            font_med   = font_big
+            font_small = font_big
+            font_tiny  = font_big
+
+        RED   = "#c0392b"
+        WHITE = "#ffffff"
+        GREEN = "#2ecc71"
+        GRAY  = "#9093ab"
+        DARK  = "#111118"
+        GOLD  = "#f1c40f"
+
+        # Красная полоса сверху
+        draw.rectangle([0, 0, W, 18], fill=RED)
+
+        # Зона фото — тёмный фон с пунктирной рамкой
+        draw.rectangle([0, 18, W, 750], fill="#0d0d18")
+
+        # Диагональная красная полоса (декор)
+        for offset in range(0, 8):
+            x0 = W - 300 + offset * 3
+            draw.line([(x0, 18), (x0 + 200, 750)], fill=RED, width=2)
+        # Яркая тонкая полоса
+        draw.line([(W-220, 18), (W-20, 750)], fill=RED, width=6)
+
+        # Плейсхолдер фото
+        ph_x, ph_y = W - 480, 80
+        ph_w, ph_h = 420, 620
+        draw.rectangle([ph_x, ph_y, ph_x+ph_w, ph_y+ph_h],
+                        fill="#0d0d18", outline="#2a2d45", width=3)
+        cx, cy = ph_x + ph_w//2, ph_y + ph_h//2
+        draw.ellipse([cx-60, cy-80, cx+60, cy+40], outline="#2a2d45", width=3)
+        draw.arc([cx-60, cy+30, cx+60, cy+180], start=0, end=180, fill="#2a2d45", width=3)
+
+        # Тег дисциплины
+        draw.rectangle([60, 80, 60 + len(discipline)*22 + 40, 140], fill=RED)
+        draw.text((80, 90), discipline.upper(), font=font_tiny, fill=WHITE)
+
+        # Имя бойца — большое
+        grad_y = 580
+        for gy in range(grad_y, 750):
+            alpha = int(255 * (gy - grad_y) / (750 - grad_y))
+            draw.rectangle([0, gy, W, gy+1],
+                           fill=(6, 6, 8, alpha if alpha < 255 else 255))
+
+        # Имя
+        draw.text((60, 600), first_n.upper(), font=font_small, fill=GRAY)
+        # Фамилия крупно
+        ln_display = last_n.upper()
+        draw.text((60, 650), ln_display, font=font_big, fill=WHITE)
+        # Страна и вес
+        draw.text((60, 780), f"{cn(acountry).upper()}   {main_cat}", font=font_small, fill=GRAY)
+
+        # Красная разделительная полоса
+        draw.rectangle([0, 830, W, 848], fill=RED)
+
+        # Блок рекордов
+        draw.rectangle([0, 848, W, 1050], fill="#060608")
+        col_w = W // 4
+        stats_data = [
+            (str(total), "БОЁВ", WHITE),
+            (str(wins),  "ПОБЕДЫ", GREEN),
+            (str(losses),"ПОРАЖЕНИЯ", RED),
+            (f"{winrate}%", "% ПОБЕД", GOLD),
+        ]
+        for i, (val, label, color) in enumerate(stats_data):
+            cx_s = i * col_w + col_w // 2
+            # Разделитель
+            if i > 0:
+                draw.rectangle([i*col_w, 870, i*col_w+2, 1030], fill=DARK)
+            # Значение
+            bbox = draw.textbbox((0,0), val, font=font_med)
+            tw = bbox[2] - bbox[0]
+            draw.text((cx_s - tw//2, 880), val, font=font_med, fill=color)
+            # Лейбл
+            bbox2 = draw.textbbox((0,0), label, font=font_tiny)
+            tw2 = bbox2[2] - bbox2[0]
+            draw.text((cx_s - tw2//2, 1000), label, font=font_tiny, fill="#3d4058")
+
+        # Полоса процента
+        draw.rectangle([0, 1050, W, 1100], fill="#0b0b14")
+        bar_x, bar_y = 60, 1065
+        bar_w, bar_h = W - 120, 12
+        draw.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h],
+                        fill="#1a1c28", outline=None)
+        fill_w = int(bar_w * winrate / 100)
+        draw.rectangle([bar_x, bar_y, bar_x+fill_w, bar_y+bar_h],
+                        fill=GREEN, outline=None)
+        draw.text((60, 1085), f"{wins} ПОБЕД  ·  СТАТИСТИКА FIAS 2021–2026",
+                  font=font_tiny, fill="#3d4058")
+
+        # Серия побед
+        y_streak = 1120
+        if streak_n >= 2:
+            draw.rectangle([0, y_streak, W, y_streak+90], fill="#071a0f")
+            for di in range(min(streak_n, 8)):
+                draw.ellipse([60 + di*28, y_streak+32, 82 + di*28, y_streak+54],
+                             fill=GREEN)
+            draw.text((60 + min(streak_n,8)*28 + 20, y_streak+28),
+                      f"СЕРИЯ {streak_n} ПОБЕД ПОДРЯД", font=font_small, fill=GREEN)
+            y_streak += 90
+
+        # Доп статистика
+        draw.rectangle([0, y_streak, W, y_streak+240], fill="#060608")
+        draw.line([0, y_streak, W, y_streak], fill=DARK, width=2)
+        extra = [
+            (fastest,         "БЫСТРЕЙШАЯ ПОБЕДА", RED),
+            (str(finals_c),   "ФИНАЛЫ В КАРЬЕРЕ",  GREEN),
+            (avg_score,       "СР. БАЛЛ / БОЙ",    WHITE),
+            (last_title_year, "ГОД ПОСЛ. ФИНАЛА",  GOLD),
+        ]
+        ecol_w = W // 2
+        for i, (val, label, color) in enumerate(extra):
+            ex = (i % 2) * ecol_w + 60
+            ey = y_streak + 20 + (i // 2) * 110
+            if i % 2 == 0 and i > 0:
+                draw.line([0, ey-10, W, ey-10], fill=DARK, width=1)
+            draw.text((ex, ey), val, font=font_med, fill=color)
+            draw.text((ex, ey+75), label, font=font_tiny, fill="#3d4058")
+
+        # Футер
+        footer_y = H - 140
+        draw.rectangle([0, footer_y, W, H], fill="#060608")
+        draw.line([0, footer_y, W, footer_y], fill=DARK, width=2)
+        draw.text((60, footer_y+30), "FIGHTGURU", font=font_med, fill=RED)
+        draw.text((60, footer_y+95), "SAMBO STATS PORTAL", font=font_tiny, fill="#2a2d40")
+        right_text = "ОФИЦИАЛЬНАЯ СТАТИСТИКА FIAS"
+        bbox_r = draw.textbbox((0,0), right_text, font=font_tiny)
+        tw_r = bbox_r[2] - bbox_r[0]
+        draw.text((W - tw_r - 60, footer_y+50), right_text, font=font_tiny, fill="#2a2d40")
+
+        # Сохраняем в буфер
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", dpi=(300, 300))
+        png_data = buf.getvalue()
+
+    except Exception as e:
+        st.warning(f"PNG генерация недоступна: {e}")
+
+    if png_data:
+        st.download_button(
+            label="📲 Скачать PNG для сторис (1080×1920)",
+            data=png_data,
+            file_name=f"{final_name.replace(' ','_')}_story.png",
+            mime="image/png",
+            type="primary",
+            use_container_width=True,
+        )
+        st.caption("Готовый PNG размером 1080×1920 — стандарт Instagram Stories. Вставь фото бойца в Canva или Фотошоп и закидывай!")
+    else:
+        st.download_button(
+            label="⬇️ Скачать HTML (открой в Safari → скриншот)",
+            data=card_html.encode('utf-8'),
+            file_name=f"{final_name.replace(' ','_')}_story_card.html",
+            mime="text/html",
+            use_container_width=True,
+        )
+        st.markdown("""
+        <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
+        padding:14px 16px;margin-top:10px;font-size:13px;color:#9093ab;line-height:1.8'>
+        <b style='color:#f0f4ff'>На iPhone:</b> нажми Скачать →
+        нажми <b style='color:#f0f4ff'>Ещё...</b> →
+        выбери <b style='color:#f0f4ff'>Safari</b> →
+        сделай скриншот → обрежь → в сторис 🔥
+        </div>
+        """, unsafe_allow_html=True)
