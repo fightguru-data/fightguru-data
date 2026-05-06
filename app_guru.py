@@ -970,8 +970,11 @@ main_cat=""; main_cat_raw=""
 if 'category_code' in matches.columns:
     cc = matches['category_code'].value_counts()
     if not cc.empty:
-        main_cat_raw = str(cc.index[0]).upper()   # исходный код: CSMM, SAMM и т.д.
-        main_cat     = get_cat(cc.index[0])        # отформатированный: "Боевое М 71кг"
+        # Берём категорию ПОСЛЕДНЕГО боя — наиболее актуальна для карточки
+        last_cat_raw = str(matches.iloc[0]['category_code']).upper()
+        # Но для отображения в профиле — самую частую (весовая категория)
+        main_cat_raw = last_cat_raw
+        main_cat     = get_cat(matches.iloc[0]['category_code'])
 
 # ─────────────────────────────────────────────────────────────────────────────
 # РЕЖИМ КАМЕРЫ
@@ -1222,30 +1225,26 @@ st.markdown("<hr style='border-color:#111318;margin-top:50px'>"
 # ═══════════════  СТОРИС  ═══════════════
 with tab_s:
     st.markdown("#### 📸 Карточка для сторис")
-    st.caption("Скачай HTML → открой в браузере → сделай скриншот → в сторис")
+    st.caption("Открой в Safari → сделай скриншот → обрежь → в сторис")
 
-    # Считаем быстрейшую победу
+    # ── Считаем статистику для карточки ──────────────────────────────────────
     fastest = "—"
     try:
-        win_rows = []
+        win_times = []
         for _, row in matches.iterrows():
             is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
             wid  = str(row.get('winner_athlete_id',''))
             mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
             if wid == mid and wid != '':
-                ft = row.get('fight_time', 0)
                 try:
-                    ms = int(float(ft))
-                    if ms > 0:
-                        win_rows.append(ms)
+                    ms = int(float(row.get('fight_time', 0)))
+                    if ms > 0: win_times.append(ms)
                 except: pass
-        if win_rows:
-            fastest_ms = min(win_rows)
-            ts = fastest_ms // 1000
+        if win_times:
+            ts = min(win_times) // 1000
             fastest = f"{ts//60}:{ts%60:02d}"
     except: pass
 
-    # Средний балл за бой
     avg_score = "—"
     try:
         scores = []
@@ -1253,330 +1252,293 @@ with tab_s:
             is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
             sc = ci(row.get('red_score') if is_r else row.get('blue_score'))
             scores.append(sc)
-        if scores:
-            avg_score = f"{sum(scores)/len(scores):.1f}"
+        if scores: avg_score = f"{sum(scores)/len(scores):.1f}"
     except: pass
 
-    # Последний титул (финал победный)
     last_title_year = "—"
     try:
         for _, row in matches.iterrows():
-            is_r = str(row.get('red_full_name','')) .lower().strip() == chosen_low
+            is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
             wid  = str(row.get('winner_athlete_id',''))
             mid  = str(row.get('red_id','') if is_r else row.get('blue_id',''))
             rc   = str(row.get('round_code','')).upper()
             if wid == mid and wid != '' and rc in ('FNL','FIN'):
                 yr = row.get('year')
                 if pd.notna(yr):
-                    last_title_year = str(int(yr))
-                    break
+                    last_title_year = str(int(yr)); break
     except: pass
 
-    # Серия побед
-    streak_n = s_n if s_type == 'win' else 0
+    streak_n     = s_n if s_type == 'win' else 0
+    fname_parts  = final_name.strip().split()
+    first_n      = fname_parts[0] if len(fname_parts) >= 2 else ""
+    last_n       = " ".join(fname_parts[1:]) if len(fname_parts) >= 2 else final_name
+    discipline   = "Боевое самбо" if "CSM" in main_cat_raw else "Спортивное самбо"
+    flag_emoji   = fl(acountry)
+    country_name = cn(acountry)
 
-    # Данные для карточки
-    fname_parts = final_name.strip().split()
-    first_n = fname_parts[0] if len(fname_parts) >= 2 else ""
-    last_n  = fname_parts[-1] if fname_parts else final_name
+    # Streak dots
+    streak_html = ""
+    if streak_n >= 2:
+        dots = "".join(
+            f'<div style="width:10px;height:10px;border-radius:50%;'
+            f'background:#2ecc71;flex-shrink:0"></div>'
+            for _ in range(min(streak_n, 8))
+        )
+        streak_html = f"""
+        <div style="padding:12px 24px;background:#071a0f;
+                    border-top:1px solid #111;border-bottom:1px solid #111;
+                    display:flex;align-items:center;gap:12px">
+          <div style="display:flex;gap:6px">{dots}</div>
+          <span style="font-family:'Bebas Neue',Impact,sans-serif;
+                       font-size:22px;color:#2ecc71;letter-spacing:.1em">
+            {streak_n} WIN STREAK
+          </span>
+        </div>"""
 
-    discipline = "Боевое самбо" if "CSM" in main_cat_raw else "Спортивное самбо"
-
-    # Генерируем HTML карточку
-    streak_dots = "".join(
-        '<div style="width:8px;height:8px;border-radius:50%;background:#2ecc71"></div>'
-        for _ in range(min(streak_n, 8))
-    )
-
-    card_html = f"""<!DOCTYPE html>
+    # Полная HTML страница — открывается в браузере
+    html_page = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<title>{final_name} — FightGuru</title>
 <style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:#060608;display:flex;justify-content:center;padding:0;font-family:'Inter',sans-serif}}
-.card{{width:400px;background:#060608;overflow:hidden;position:relative}}
-.photo-zone{{position:relative;height:280px;background:#0d0d18;overflow:hidden}}
-.stripe1{{position:absolute;top:-20px;right:-10px;width:200px;height:360px;background:#c0392b;transform:skewX(-12deg);opacity:.08}}
-.stripe2{{position:absolute;top:-20px;right:34px;width:4px;height:360px;background:#c0392b;transform:skewX(-12deg);opacity:.6}}
-.photo-area{{position:absolute;right:20px;bottom:0;width:200px;height:260px;display:flex;align-items:flex-end;justify-content:center}}
-.photo-box{{width:180px;height:250px;border:1.5px dashed #2a2d45;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#0d0d18}}
-.photo-hint{{font-size:11px;color:#2a2d45;text-transform:uppercase;letter-spacing:.1em}}
-.top-left{{position:absolute;top:16px;left:16px;z-index:10}}
-.disc-tag{{display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;padding:5px 12px}}
-.name-block{{position:absolute;bottom:0;left:0;right:0;padding:0 16px 14px;background:linear-gradient(to top,#060608 55%,transparent);z-index:10}}
-.first-name{{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#6b6e85;letter-spacing:.25em;line-height:1;text-transform:uppercase}}
-.last-name{{font-family:'Bebas Neue',sans-serif;font-size:58px;color:#fff;letter-spacing:.04em;line-height:.9;text-transform:uppercase}}
-.last-name span{{color:#c0392b}}
-.country-row{{display:flex;align-items:center;gap:7px;margin-top:7px}}
-.country-name{{font-size:12px;font-weight:700;color:#9093ab;text-transform:uppercase;letter-spacing:.1em}}
-.weight-pill{{margin-left:auto;background:#0d0d18;border:1px solid #2a2d45;padding:3px 10px;font-size:11px;font-weight:700;color:#9093ab;text-transform:uppercase;letter-spacing:.08em}}
-.divider{{height:3px;background:#c0392b}}
-.record-block{{padding:16px;display:flex;gap:0;border-bottom:1px solid #111118}}
-.rec-item{{flex:1;text-align:center;position:relative}}
-.rec-item+.rec-item::before{{content:'';position:absolute;left:0;top:15%;height:70%;width:1px;background:#1a1c28}}
-.rec-num{{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:1;margin-bottom:3px}}
-.rec-num.w{{color:#2ecc71}}.rec-num.l{{color:#c0392b}}.rec-num.t{{color:#f0f4ff}}.rec-num.y{{color:#f1c40f}}
-.rec-label{{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#3d4058}}
-.pct-block{{padding:10px 16px 13px;border-bottom:1px solid #111118}}
-.pct-row{{display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:6px}}
-.pct-track{{height:4px;background:#1a1c28;border-radius:2px;overflow:hidden}}
-.pct-fill{{height:100%;background:#2ecc71;border-radius:2px;width:{winrate}%}}
-.streak-bar{{padding:10px 16px;display:flex;align-items:center;gap:10px;background:#071a0f;border-bottom:1px solid #111118}}
-.streak-dots{{display:flex;gap:4px}}
-.streak-text{{font-size:11px;font-weight:700;color:#2ecc71;text-transform:uppercase;letter-spacing:.1em}}
-.streak-num{{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#2ecc71;margin-left:auto;letter-spacing:.05em}}
-.stats-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:#111118;border-bottom:1px solid #111118}}
-.sg-cell{{background:#060608;padding:12px 16px}}
-.sg-val{{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#f0f4ff;line-height:1;letter-spacing:.02em}}
-.sg-val.accent{{color:#c0392b}}.sg-val.green{{color:#2ecc71}}.sg-val.gold{{color:#f1c40f}}
-.sg-label{{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#3d4058;margin-top:3px}}
-.footer{{padding:12px 16px;display:flex;align-items:center;justify-content:space-between}}
-.brand{{font-family:'Bebas Neue',sans-serif;font-size:22px;color:#c0392b;letter-spacing:.15em}}
-.brand-sub{{font-size:9px;color:#2a2d40;text-transform:uppercase;letter-spacing:.1em;margin-top:-2px}}
-.fias-badge{{font-size:9px;color:#2a2d40;text-transform:uppercase;letter-spacing:.08em;text-align:right;line-height:1.5}}
+  * {{ box-sizing:border-box; margin:0; padding:0; }}
+  html,body {{ background:#060608; min-height:100vh; display:flex;
+               justify-content:center; align-items:flex-start; padding:0; }}
+  .card {{
+    width:100%; max-width:480px;
+    background:#060608;
+    font-family:'Inter',sans-serif;
+  }}
+
+  /* Красная верхняя полоса */
+  .top-stripe {{
+    background:#c0392b; padding:9px 24px;
+    font-family:'Bebas Neue',Impact,sans-serif;
+    font-size:18px; color:#fff; letter-spacing:.2em;
+  }}
+
+  /* Зона фото + имя */
+  .hero {{
+    display:flex; height:220px;
+    background:#0d0d18;
+    border-bottom:4px solid #c0392b;
+  }}
+  .hero-info {{
+    flex:1; display:flex; flex-direction:column;
+    justify-content:flex-end;
+    padding:0 16px 20px 24px; min-width:0;
+    overflow:hidden;
+  }}
+  .disc-tag {{
+    display:inline-block; background:#c0392b; color:#fff;
+    font-family:'Bebas Neue',Impact,sans-serif;
+    font-size:14px; letter-spacing:.18em;
+    padding:3px 12px; margin-bottom:12px;
+  }}
+  .f-first {{
+    font-family:'Inter',sans-serif; font-size:13px;
+    font-weight:700; color:#6b6e85;
+    text-transform:uppercase; letter-spacing:.25em;
+    margin-bottom:2px;
+  }}
+  .f-last {{
+    font-family:'Bebas Neue',Impact,sans-serif;
+    font-size:58px; color:#fff;
+    letter-spacing:-.5px; line-height:.88;
+    white-space:nowrap; overflow:hidden;
+    text-overflow:clip;
+    margin-bottom:12px;
+  }}
+  .f-last span {{ color:#c0392b; }}
+  .f-country {{
+    display:flex; align-items:center; gap:8px;
+  }}
+  .f-cname {{
+    font-family:'Inter',sans-serif; font-size:12px;
+    font-weight:700; color:#9093ab;
+    text-transform:uppercase; letter-spacing:.1em;
+  }}
+  .f-weight {{
+    border:1px solid #2a2d45; padding:2px 9px;
+    font-family:'Inter',sans-serif; font-size:10px;
+    color:#52566e; letter-spacing:.07em;
+  }}
+
+  /* Зона фото */
+  .photo-box {{
+    width:140px; flex-shrink:0;
+    background:#111122; border-left:3px solid #c0392b;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:10px;
+  }}
+  .photo-circle {{
+    width:72px; height:72px; border-radius:50%;
+    border:2px dashed #2a2d45;
+    display:flex; align-items:center; justify-content:center;
+    font-size:28px; opacity:.35;
+  }}
+  .photo-hint {{
+    font-family:'Inter',sans-serif; font-size:9px;
+    color:#2a2d45; text-transform:uppercase;
+    letter-spacing:.1em; text-align:center;
+  }}
+
+  /* Рекорд */
+  .record {{
+    display:grid; grid-template-columns:repeat(4,1fr);
+    border-bottom:1px solid #111;
+  }}
+  .rec {{
+    padding:14px 4px; text-align:center;
+    border-right:1px solid #111;
+  }}
+  .rec:last-child {{ border-right:none; }}
+  .rval {{
+    font-family:'Bebas Neue',Impact,sans-serif;
+    font-size:42px; line-height:1; margin-bottom:5px;
+  }}
+  .rval.w {{ color:#2ecc71; }}
+  .rval.l {{ color:#c0392b; }}
+  .rval.n {{ color:#f0f4ff; }}
+  .rval.y {{ color:#f1c40f; }}
+  .rlbl {{
+    font-family:'Inter',sans-serif; font-size:9px;
+    font-weight:700; text-transform:uppercase;
+    letter-spacing:.12em; color:#3d4058;
+  }}
+
+  /* Полоса */
+  .pct-bar {{ padding:10px 24px 12px; border-bottom:1px solid #111; }}
+  .pct-row {{
+    display:flex; justify-content:space-between;
+    font-family:'Inter',sans-serif; font-size:10px;
+    font-weight:700; margin-bottom:6px;
+  }}
+  .track {{ height:5px; background:#1a1c28; border-radius:3px; overflow:hidden; }}
+  .fill  {{ height:100%; background:#2ecc71; border-radius:3px; width:{winrate}%; }}
+
+  /* Доп статы */
+  .extra {{
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:1px; background:#111; border-bottom:1px solid #111;
+  }}
+  .ec {{ background:#060608; padding:14px 20px; }}
+  .ev {{
+    font-family:'Bebas Neue',Impact,sans-serif;
+    font-size:34px; line-height:1; margin-bottom:5px;
+  }}
+  .ev.r {{ color:#c0392b; }} .ev.g {{ color:#2ecc71; }}
+  .ev.w {{ color:#f0f4ff; }} .ev.y {{ color:#f1c40f; }}
+  .el {{
+    font-family:'Inter',sans-serif; font-size:9px;
+    font-weight:700; text-transform:uppercase;
+    letter-spacing:.12em; color:#3d4058;
+  }}
+
+  /* Футер */
+  .footer {{
+    padding:14px 24px;
+    display:flex; justify-content:space-between; align-items:center;
+  }}
+  .brand {{
+    font-family:'Bebas Neue',Impact,sans-serif;
+    font-size:26px; color:#c0392b; letter-spacing:.15em;
+  }}
+  .brand-sub {{
+    font-family:'Inter',sans-serif; font-size:9px;
+    color:#252840; text-transform:uppercase; letter-spacing:.1em;
+  }}
+  .fias-txt {{
+    font-family:'Inter',sans-serif; font-size:9px;
+    color:#252840; text-transform:uppercase;
+    letter-spacing:.07em; text-align:right; line-height:1.6;
+  }}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="photo-zone">
-    <div class="stripe1"></div>
-    <div class="stripe2"></div>
-    <div class="top-left"><div class="disc-tag">{discipline}</div></div>
-    <div class="photo-area">
-      <div class="photo-box">
-        <div style="font-size:36px;opacity:.2">📷</div>
-        <div class="photo-hint">Вставьте фото</div>
+
+  <div class="top-stripe">{discipline}</div>
+
+  <div class="hero">
+    <div class="hero-info">
+      <div class="f-first">{first_n}</div>
+      <div class="f-last">{last_n[:-2]}<span>{last_n[-2:] if len(last_n)>=2 else last_n}</span></div>
+      <div class="f-country">
+        <span style="font-size:20px">{flag_emoji}</span>
+        <span class="f-cname">{country_name}</span>
+        <span class="f-weight">{main_cat}</span>
       </div>
     </div>
-    <div class="name-block">
-      <div class="first-name">{first_n}</div>
-      <div class="last-name">{last_n[:-2]}<span>{last_n[-2:]}</span></div>
-      <div class="country-row">
-        <span style="font-size:20px">{fl(acountry)}</span>
-        <span class="country-name">{cn(acountry)}</span>
-        <span class="weight-pill">{main_cat}</span>
-      </div>
+    <div class="photo-box">
+      <div class="photo-circle">📷</div>
+      <div class="photo-hint">место<br>для фото</div>
     </div>
   </div>
-  <div class="divider"></div>
-  <div class="record-block">
-    <div class="rec-item"><div class="rec-num t">{total}</div><div class="rec-label">Боёв</div></div>
-    <div class="rec-item"><div class="rec-num w">{wins}</div><div class="rec-label">Победы</div></div>
-    <div class="rec-item"><div class="rec-num l">{losses}</div><div class="rec-label">Поражения</div></div>
-    <div class="rec-item"><div class="rec-num y">{winrate}%</div><div class="rec-label">% побед</div></div>
+
+  <div class="record">
+    <div class="rec"><div class="rval n">{total}</div><div class="rlbl">Боёв</div></div>
+    <div class="rec"><div class="rval w">{wins}</div><div class="rlbl">Победы</div></div>
+    <div class="rec"><div class="rval l">{losses}</div><div class="rlbl">Пораж.</div></div>
+    <div class="rec"><div class="rval y">{winrate}%</div><div class="rlbl">% побед</div></div>
   </div>
-  <div class="pct-block">
+
+  <div class="pct-bar">
     <div class="pct-row">
       <span style="color:#2ecc71">{wins} побед</span>
-      <span style="color:#3d4058">Статистика FIAS · 2021–2026</span>
+      <span style="color:#3d4058">FIAS · 2021–2026</span>
     </div>
-    <div class="pct-track"><div class="pct-fill"></div></div>
+    <div class="track"><div class="fill"></div></div>
   </div>
-  {"" if streak_n < 2 else f'<div class="streak-bar"><div class="streak-dots">{streak_dots}</div><span class="streak-text">Серия побед подряд</span><span class="streak-num">{streak_n} WIN STREAK</span></div>'}
-  <div class="stats-grid">
-    <div class="sg-cell"><div class="sg-val accent">{fastest}</div><div class="sg-label">Быстрейшая победа</div></div>
-    <div class="sg-cell"><div class="sg-val green">{finals_c}</div><div class="sg-label">Финалы в карьере</div></div>
-    <div class="sg-cell"><div class="sg-val">{avg_score}</div><div class="sg-label">Ср. балл / бой</div></div>
-    <div class="sg-cell"><div class="sg-val gold">{last_title_year}</div><div class="sg-label">Год последнего финала</div></div>
+
+  {streak_html}
+
+  <div class="extra">
+    <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
+    <div class="ec"><div class="ev g">{finals_c}</div><div class="el">Финалы в карьере</div></div>
+    <div class="ec"><div class="ev w">{avg_score}</div><div class="el">Ср. балл / бой</div></div>
+    <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Год посл. финала</div></div>
   </div>
+
   <div class="footer">
-    <div><div class="brand">FIGHTGURU</div><div class="brand-sub">sambo stats portal</div></div>
-    <div class="fias-badge">Официальная статистика<br>FIAS · 2021–2026</div>
+    <div>
+      <div class="brand">FIGHTGURU</div>
+      <div class="brand-sub">Sambo Stats Portal</div>
+    </div>
+    <div class="fias-txt">Официальная<br>статистика FIAS</div>
   </div>
+
 </div>
 </body>
 </html>"""
 
-    # Показываем превью карточки в приложении
-    import streamlit.components.v1 as components
-    components.html(card_html, height=720, scrolling=False)
+    # Кнопка скачивания HTML
+    st.download_button(
+        label="📲 Скачать карточку → открыть в Safari",
+        data=html_page.encode('utf-8'),
+        file_name=f"{final_name.replace(' ','_')}_story.html",
+        mime="text/html",
+        type="primary",
+        use_container_width=True,
+    )
 
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-    # Генерируем PNG через Pillow (размер Instagram Stories: 1080x1920)
-    png_data = None
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-        import io
-
-        W, H = 1080, 1920
-        img = Image.new("RGB", (W, H), color="#060608")
-        draw = ImageDraw.Draw(img)
-
-        # Пытаемся загрузить шрифт, fallback на default
-        try:
-            font_big   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120)
-            font_med   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 70)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 45)
-            font_tiny  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
-        except:
-            font_big   = ImageFont.load_default()
-            font_med   = font_big
-            font_small = font_big
-            font_tiny  = font_big
-
-        RED   = "#c0392b"
-        WHITE = "#ffffff"
-        GREEN = "#2ecc71"
-        GRAY  = "#9093ab"
-        DARK  = "#111118"
-        GOLD  = "#f1c40f"
-
-        # Красная полоса сверху
-        draw.rectangle([0, 0, W, 18], fill=RED)
-
-        # Зона фото — тёмный фон с пунктирной рамкой
-        draw.rectangle([0, 18, W, 750], fill="#0d0d18")
-
-        # Диагональная красная полоса (декор)
-        for offset in range(0, 8):
-            x0 = W - 300 + offset * 3
-            draw.line([(x0, 18), (x0 + 200, 750)], fill=RED, width=2)
-        # Яркая тонкая полоса
-        draw.line([(W-220, 18), (W-20, 750)], fill=RED, width=6)
-
-        # Плейсхолдер фото
-        ph_x, ph_y = W - 480, 80
-        ph_w, ph_h = 420, 620
-        draw.rectangle([ph_x, ph_y, ph_x+ph_w, ph_y+ph_h],
-                        fill="#0d0d18", outline="#2a2d45", width=3)
-        cx, cy = ph_x + ph_w//2, ph_y + ph_h//2
-        draw.ellipse([cx-60, cy-80, cx+60, cy+40], outline="#2a2d45", width=3)
-        draw.arc([cx-60, cy+30, cx+60, cy+180], start=0, end=180, fill="#2a2d45", width=3)
-
-        # Тег дисциплины
-        draw.rectangle([60, 80, 60 + len(discipline)*22 + 40, 140], fill=RED)
-        draw.text((80, 90), discipline.upper(), font=font_tiny, fill=WHITE)
-
-        # Имя бойца — большое
-        grad_y = 580
-        for gy in range(grad_y, 750):
-            alpha = int(255 * (gy - grad_y) / (750 - grad_y))
-            draw.rectangle([0, gy, W, gy+1],
-                           fill=(6, 6, 8, alpha if alpha < 255 else 255))
-
-        # Имя
-        draw.text((60, 600), first_n.upper(), font=font_small, fill=GRAY)
-        # Фамилия крупно
-        ln_display = last_n.upper()
-        draw.text((60, 650), ln_display, font=font_big, fill=WHITE)
-        # Страна и вес
-        draw.text((60, 780), f"{cn(acountry).upper()}   {main_cat}", font=font_small, fill=GRAY)
-
-        # Красная разделительная полоса
-        draw.rectangle([0, 830, W, 848], fill=RED)
-
-        # Блок рекордов
-        draw.rectangle([0, 848, W, 1050], fill="#060608")
-        col_w = W // 4
-        stats_data = [
-            (str(total), "БОЁВ", WHITE),
-            (str(wins),  "ПОБЕДЫ", GREEN),
-            (str(losses),"ПОРАЖЕНИЯ", RED),
-            (f"{winrate}%", "% ПОБЕД", GOLD),
-        ]
-        for i, (val, label, color) in enumerate(stats_data):
-            cx_s = i * col_w + col_w // 2
-            # Разделитель
-            if i > 0:
-                draw.rectangle([i*col_w, 870, i*col_w+2, 1030], fill=DARK)
-            # Значение
-            bbox = draw.textbbox((0,0), val, font=font_med)
-            tw = bbox[2] - bbox[0]
-            draw.text((cx_s - tw//2, 880), val, font=font_med, fill=color)
-            # Лейбл
-            bbox2 = draw.textbbox((0,0), label, font=font_tiny)
-            tw2 = bbox2[2] - bbox2[0]
-            draw.text((cx_s - tw2//2, 1000), label, font=font_tiny, fill="#3d4058")
-
-        # Полоса процента
-        draw.rectangle([0, 1050, W, 1100], fill="#0b0b14")
-        bar_x, bar_y = 60, 1065
-        bar_w, bar_h = W - 120, 12
-        draw.rectangle([bar_x, bar_y, bar_x+bar_w, bar_y+bar_h],
-                        fill="#1a1c28", outline=None)
-        fill_w = int(bar_w * winrate / 100)
-        draw.rectangle([bar_x, bar_y, bar_x+fill_w, bar_y+bar_h],
-                        fill=GREEN, outline=None)
-        draw.text((60, 1085), f"{wins} ПОБЕД  ·  СТАТИСТИКА FIAS 2021–2026",
-                  font=font_tiny, fill="#3d4058")
-
-        # Серия побед
-        y_streak = 1120
-        if streak_n >= 2:
-            draw.rectangle([0, y_streak, W, y_streak+90], fill="#071a0f")
-            for di in range(min(streak_n, 8)):
-                draw.ellipse([60 + di*28, y_streak+32, 82 + di*28, y_streak+54],
-                             fill=GREEN)
-            draw.text((60 + min(streak_n,8)*28 + 20, y_streak+28),
-                      f"СЕРИЯ {streak_n} ПОБЕД ПОДРЯД", font=font_small, fill=GREEN)
-            y_streak += 90
-
-        # Доп статистика
-        draw.rectangle([0, y_streak, W, y_streak+240], fill="#060608")
-        draw.line([0, y_streak, W, y_streak], fill=DARK, width=2)
-        extra = [
-            (fastest,         "БЫСТРЕЙШАЯ ПОБЕДА", RED),
-            (str(finals_c),   "ФИНАЛЫ В КАРЬЕРЕ",  GREEN),
-            (avg_score,       "СР. БАЛЛ / БОЙ",    WHITE),
-            (last_title_year, "ГОД ПОСЛ. ФИНАЛА",  GOLD),
-        ]
-        ecol_w = W // 2
-        for i, (val, label, color) in enumerate(extra):
-            ex = (i % 2) * ecol_w + 60
-            ey = y_streak + 20 + (i // 2) * 110
-            if i % 2 == 0 and i > 0:
-                draw.line([0, ey-10, W, ey-10], fill=DARK, width=1)
-            draw.text((ex, ey), val, font=font_med, fill=color)
-            draw.text((ex, ey+75), label, font=font_tiny, fill="#3d4058")
-
-        # Футер
-        footer_y = H - 140
-        draw.rectangle([0, footer_y, W, H], fill="#060608")
-        draw.line([0, footer_y, W, footer_y], fill=DARK, width=2)
-        draw.text((60, footer_y+30), "FIGHTGURU", font=font_med, fill=RED)
-        draw.text((60, footer_y+95), "SAMBO STATS PORTAL", font=font_tiny, fill="#2a2d40")
-        right_text = "ОФИЦИАЛЬНАЯ СТАТИСТИКА FIAS"
-        bbox_r = draw.textbbox((0,0), right_text, font=font_tiny)
-        tw_r = bbox_r[2] - bbox_r[0]
-        draw.text((W - tw_r - 60, footer_y+50), right_text, font=font_tiny, fill="#2a2d40")
-
-        # Сохраняем в буфер
-        buf = io.BytesIO()
-        img.save(buf, format="PNG", dpi=(300, 300))
-        png_data = buf.getvalue()
-
-    except Exception as e:
-        st.warning(f"PNG генерация недоступна: {e}")
-
-    if png_data:
-        st.download_button(
-            label="📲 Скачать PNG для сторис (1080×1920)",
-            data=png_data,
-            file_name=f"{final_name.replace(' ','_')}_story.png",
-            mime="image/png",
-            type="primary",
-            use_container_width=True,
-        )
-        st.caption("Готовый PNG размером 1080×1920 — стандарт Instagram Stories. Вставь фото бойца в Canva или Фотошоп и закидывай!")
-    else:
-        st.download_button(
-            label="⬇️ Скачать HTML (открой в Safari → скриншот)",
-            data=card_html.encode('utf-8'),
-            file_name=f"{final_name.replace(' ','_')}_story_card.html",
-            mime="text/html",
-            use_container_width=True,
-        )
-        st.markdown("""
-        <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
-        padding:14px 16px;margin-top:10px;font-size:13px;color:#9093ab;line-height:1.8'>
-        <b style='color:#f0f4ff'>На iPhone:</b> нажми Скачать →
-        нажми <b style='color:#f0f4ff'>Ещё...</b> →
-        выбери <b style='color:#f0f4ff'>Safari</b> →
-        сделай скриншот → обрежь → в сторис 🔥
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("""
+    <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
+    padding:14px 18px;margin-top:12px;line-height:1.9'>
+    <div style='font-size:14px;font-weight:700;color:#f0f4ff;margin-bottom:8px'>
+      Как использовать на iPhone:
+    </div>
+    <div style='font-size:13px;color:#9093ab'>
+      1. Нажми <b style='color:#f0f4ff'>Скачать карточку</b><br>
+      2. Нажми <b style='color:#f0f4ff'>Ещё...</b> → выбери <b style='color:#f0f4ff'>Safari</b><br>
+      3. Карточка откроется с красивыми шрифтами Bebas Neue<br>
+      4. Сделай <b style='color:#f0f4ff'>скриншот</b> (боковая кнопка + громкость)<br>
+      5. В Фото обрежь до карточки<br>
+      6. Вставь фото бойца в <b style='color:#f0f4ff'>Canva</b> или Фотошоп<br>
+      7. Закидывай в сторис 🔥
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
