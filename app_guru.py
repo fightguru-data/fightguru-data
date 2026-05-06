@@ -23,7 +23,7 @@ st.set_page_config(page_title="FightGuru", page_icon="🥋", layout="wide")
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1515,9 +1515,18 @@ with tab_s:
 </body>
 </html>"""
 
-    # Показываем карточку прямо в приложении — Bebas Neue грузится в iframe
-    import streamlit.components.v1 as components
-    components.html(html_page, height=680, scrolling=False)
+    # Показываем карточку через st.markdown — шрифты из основного CSS работают
+    # Извлекаем только <body> из html_page для вставки в DOM
+    import re as _re
+    body_match = _re.search(r'<body>(.*?)</body>', html_page, _re.DOTALL)
+    card_body  = body_match.group(1) if body_match else ""
+    style_match = _re.search(r'<style>(.*?)</style>', html_page, _re.DOTALL)
+    card_style  = style_match.group(1) if style_match else ""
+
+    st.markdown(
+        f"<style>{card_style}</style>{card_body}",
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
     <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
