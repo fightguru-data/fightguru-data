@@ -375,12 +375,23 @@ def inits(name):
     if len(p) >= 2: return (p[0][0]+p[-1][0]).upper()
     return name[:2].upper() if name else "?"
 
+def age_word(n):
+    """31 год, 22 года, 15 лет"""
+    if 11 <= n % 100 <= 14:
+        return f"{n} лет"
+    r = n % 10
+    if r == 1:   return f"{n} год"
+    if 2 <= r <= 4: return f"{n} года"
+    return f"{n} лет"
+
 def fmt_dob(raw):
     try: return datetime.strptime(raw, "%Y-%m-%d").strftime("%d.%m.%Y")
     except: return raw
 
 def calc_age(raw):
-    try: return f"{(datetime.now()-datetime.strptime(raw,'%Y-%m-%d')).days//365} лет"
+    try:
+        n = (datetime.now()-datetime.strptime(raw,'%Y-%m-%d')).days//365
+        return age_word(n)
     except: return ""
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1368,6 +1379,11 @@ with tab_s:
     flag_emoji   = fl(acountry)
     country_name = cn(acountry)
 
+    # Схватка (спортивное/пляжное) или Бой (боевое)
+    _is_combat   = 'CSM' in main_cat_raw
+    _fight_word  = "Боёв" if _is_combat else "Схваток"
+    _fight_word1 = "бой"  if _is_combat else "схватку"
+
     # Streak dots
     streak_html = ""
     if _streak_n >= 2:
@@ -1496,9 +1512,10 @@ with tab_s:
         f'<span style="font-size:20px">{flag_emoji}</span>\n'
         f'<span class="f-cname">{country_name}</span>\n'
         f'<span class="f-weight">{_main_cat}</span>\n'
+        f'<span style="font-size:11px;color:#606480;margin-left:6px">{age_str}</span>\n'
         "</div></div></div>\n"
         '<div class="record">\n'
-        f'<div class="rec"><div class="rval n">{_total}</div><div class="rlbl">&#x411;&#x43E;&#x451;&#x432;</div></div>\n'
+        f'<div class="rec"><div class="rval n">{_total}</div><div class="rlbl">{_fight_word}</div></div>\n'
         f'<div class="rec"><div class="rval w">{_wins}</div><div class="rlbl">&#x41F;&#x43E;&#x431;&#x435;&#x434;&#x44B;</div></div>\n'
         f'<div class="rec"><div class="rval l">{_losses}</div><div class="rlbl">&#x41F;&#x43E;&#x440;&#x430;&#x436;.</div></div>\n'
         f'<div class="rec"><div class="rval y">{_winrate}%</div><div class="rlbl">% &#x43F;&#x43E;&#x431;&#x435;&#x434;</div></div>\n'
