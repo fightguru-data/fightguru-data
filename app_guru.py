@@ -533,7 +533,14 @@ for k,v in [('sq',''),('prev_sq',''),('filter','Все'),('sel',None),
 with st.sidebar:
     st.markdown("### 🥋 FightGuru")
     st.markdown("---")
-    nav = st.radio("nav", ["👤 Досье","🏛️ Пантеон","🏆 Турнир"], label_visibility="collapsed")
+    # Если пришли по кнопке навигации — переключаем вкладку
+    if 'nav_page' in st.session_state and st.session_state['nav_page']:
+        _default_nav = ["👤 Досье","🏛️ Пантеон","🏆 Турнир"].index(st.session_state['nav_page'])
+        st.session_state['nav_page'] = None
+    else:
+        _default_nav = 0
+    nav = st.radio("nav", ["👤 Досье","🏛️ Пантеон","🏆 Турнир"],
+                   index=_default_nav, label_visibility="collapsed")
     st.markdown("---")
     if nav == "👤 Досье":
         cam_val = st.toggle("📹 Режим камеры", value=st.session_state.cam)
@@ -762,23 +769,52 @@ if nav == "🏆 Турнир":
     st.markdown("")
     final_ms = get_rnd(final_rc) if final_rc else None
     wname, wlast, wcnt = winner_of(final_ms)
-    nav_cols = st.columns(2)
-    with nav_cols[0]:
-        if wname and st.button(f"-> Досье чемпиона: {wname}", use_container_width=True):
-            st.session_state.sq = wlast; st.session_state.prev_sq = ""
-            st.session_state.sel = None; st.rerun()
+    # Серебряный призёр — проигравший финала
+    silver_name = silver_last = ""
+    if final_ms is not None and not final_ms.empty:
+        m_fin = final_ms.iloc[0]
+        wid_f = str(m_fin.get('winner_athlete_id',''))
+        for side in ('red','blue'):
+            sid_f = str(m_fin.get(f'{side}_id',''))
+            if sid_f and sid_f != wid_f and wid_f:
+                silver_name = str(m_fin.get(f'{side}_full_name','')).strip()
+                silver_last = str(m_fin.get(f'{side}_last_name','')).strip()
+                break
 
+    nav_cols = st.columns(2)
+    btn_i = 0
+
+    # 🥇 Чемпион
+    with nav_cols[btn_i % 2]:
+        if wname and st.button(f"🥇 Досье: {wname}", use_container_width=True, key="btn_gold"):
+            st.session_state.sq = wlast; st.session_state.prev_sq = ""
+            st.session_state.sel = None
+            st.session_state['nav_page'] = '👤 Досье'
+            st.rerun()
+    btn_i += 1
+
+    # 🥈 Серебро
+    if silver_name:
+        with nav_cols[btn_i % 2]:
+            if st.button(f"🥈 Досье: {silver_name}", use_container_width=True, key="btn_silver"):
+                st.session_state.sq = silver_last; st.session_state.prev_sq = ""
+                st.session_state.sel = None
+                st.session_state['nav_page'] = '👤 Досье'
+                st.rerun()
+        btn_i += 1
+
+    # 🥉 Бронза (только спортивное)
     if not is_combat:
-        bi = 0
-        for rc in brnz_present:
+        for bi, rc in enumerate(brnz_present):
             ms = get_rnd(rc)
             bn, bl, bc = winner_of(ms)
             if bn:
-                with nav_cols[bi % 2]:
-                    if st.button(f"-> Досье: {bn}", key=f"br_{bi}", use_container_width=True):
+                with nav_cols[(btn_i + bi) % 2]:
+                    if st.button(f"🥉 Досье: {bn}", key=f"br_{bi}", use_container_width=True):
                         st.session_state.sq = bl; st.session_state.prev_sq = ""
-                        st.session_state.sel = None; st.rerun()
-                bi += 1
+                        st.session_state.sel = None
+                        st.session_state['nav_page'] = '👤 Досье'
+                        st.rerun()
 
     st.stop()
 
@@ -1151,6 +1187,7 @@ with tab_m:
             st.session_state.prev_sq = ""
             st.session_state.sel     = None
             st.session_state.filter  = "Все"
+            st.session_state['nav_page'] = '👤 Досье'
             st.rerun()
 
         shown+=1
