@@ -1493,7 +1493,7 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
 
 /* Имя — мелко, Inter, широкий трекинг */
 .f-first{{
-  font-size:10px;
+  font-size:11px;
   font-weight:700;
   color:#52566e;
   text-transform:uppercase;
@@ -1505,25 +1505,25 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
 /* Фамилия — Bebas Neue, крупно, последние 2 буквы красные */
 .f-last{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:54px;
-  color:#f0f4ff;
+  font-size:59px;
+  color:#ffffff;
   line-height:.9;
   letter-spacing:.01em;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:clip;
-  margin-bottom:10px;
+  margin-bottom:11px;
 }}
 .f-last .red{{color:#c0392b;}}
 
 /* Категория — главная строка, жирная, белая, хорошо читается */
 .f-cat{{
-  font-size:13px;
+  font-size:14px;
   font-weight:800;
-  color:#dde0ef;
+  color:#ffffff;
   letter-spacing:.02em;
   line-height:1.2;
-  margin-bottom:8px;
+  margin-bottom:9px;
 }}
 
 /* Страна + возраст — одна строка */
@@ -1532,15 +1532,15 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
   align-items:center;
   gap:8px;
 }}
-.f-flag{{font-size:18px;line-height:1;flex-shrink:0;}}
+.f-flag{{font-size:19px;line-height:1;flex-shrink:0;}}
 .f-cname{{
-  font-size:11px;font-weight:700;
+  font-size:12px;font-weight:700;
   text-transform:uppercase;letter-spacing:.12em;
   color:#7880a0;
 }}
 /* Возраст — красный акцент, но не кричащий */
 .f-age{{
-  font-size:11px;font-weight:700;
+  font-size:12px;font-weight:700;
   color:#c0392b;
   letter-spacing:.04em;
   margin-left:2px;
@@ -1563,14 +1563,14 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
 .rec:last-child{{border-right:none;}}
 .rv{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:48px;line-height:1;
+  font-size:52px;line-height:1;
 }}
-.rv.n{{color:#f0f4ff;}}
+.rv.n{{color:#ffffff;}}
 .rv.g{{color:#27ae60;}}
 .rv.r{{color:#c0392b;}}
 .rv.y{{color:#e6b800;}}
 .rl{{
-  font-size:8px;font-weight:800;
+  font-size:9px;font-weight:800;
   text-transform:uppercase;letter-spacing:.14em;
   color:#52566e;
 }}
@@ -1589,8 +1589,8 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
   display:flex;justify-content:space-between;
   align-items:baseline;
 }}
-.pbar-wins{{font-size:11px;font-weight:700;color:#27ae60;}}
-.pbar-src{{font-size:9px;font-weight:500;color:#30334a;letter-spacing:.08em;}}
+.pbar-wins{{font-size:12px;font-weight:700;color:#27ae60;}}
+.pbar-src{{font-size:10px;font-weight:500;color:#30334a;letter-spacing:.08em;}}
 .pbar-track{{height:3px;background:#161720;border-radius:2px;overflow:hidden;}}
 .pbar-fill{{height:100%;background:#27ae60;border-radius:2px;width:{_winrate}%;}}
 
@@ -1611,7 +1611,7 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
 }}
 .s-txt{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:20px;letter-spacing:.1em;color:#27ae60;
+  font-size:22px;letter-spacing:.1em;color:#27ae60;
 }}
 
 /* ─── 4 ЯЧЕЙКИ СТАТЫ  flex:1 ──────────────────────── */
@@ -1630,14 +1630,14 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
 }}
 .ev{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:38px;line-height:1;
+  font-size:42px;line-height:1;
 }}
 .ev.r{{color:#c0392b;}}
 .ev.g{{color:#27ae60;}}
-.ev.w{{color:#e8ecff;}}
+.ev.w{{color:#ffffff;}}
 .ev.y{{color:#e6b800;}}
 .el{{
-  font-size:8px;font-weight:800;
+  font-size:9px;font-weight:800;
   text-transform:uppercase;letter-spacing:.14em;
   color:#30334a;
 }}
@@ -1666,19 +1666,19 @@ html,body{{background:#060608;margin:0;padding:0;width:536px}}
   font-size:13px;font-weight:900;color:#fff;
   letter-spacing:.02em;
 }}
-/* Бренд: FIGHTGURU — 24px Bebas, под логотипом визуально тихий */
+/* Бренд: FIGHTGURU — 26px Bebas, под логотипом визуально тихий */
 .brand{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:24px;letter-spacing:.18em;color:#c0392b;
+  font-size:26px;letter-spacing:.18em;color:#c0392b;
   line-height:1;
 }}
 .brand-sub{{
-  font-size:7px;font-weight:700;letter-spacing:.14em;
+  font-size:8px;font-weight:700;letter-spacing:.14em;
   text-transform:uppercase;color:#1e2130;
   margin-top:2px;
 }}
 .fias{{
-  font-size:8px;font-weight:700;
+  font-size:9px;font-weight:700;
   text-transform:uppercase;letter-spacing:.1em;
   color:#1e2130;text-align:right;line-height:1.9;
 }}
