@@ -376,7 +376,6 @@ def inits(name):
     return name[:2].upper() if name else "?"
 
 def age_word(n):
-    """31 год, 22 года, 15 лет"""
     if 11 <= n % 100 <= 14:
         return f"{n} лет"
     r = n % 10
@@ -512,14 +511,6 @@ def load_data():
 df = load_data()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ТЕЛЕГРАМ-БОТ
-# Используем threading.Thread (не Process) — Process не работает на Streamlit Cloud.
-# df передаётся как snapshot через замыкание.
-# bot_started хранится в session_state — НЕ перезапускаем при rerun.
-# ─────────────────────────────────────────────────────────────────────────────
-# Бот запущен отдельно на Railway — здесь ничего не нужно
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
 for k,v in [('sq',''),('prev_sq',''),('filter','Все'),('sel',None),
@@ -533,7 +524,6 @@ for k,v in [('sq',''),('prev_sq',''),('filter','Все'),('sel',None),
 with st.sidebar:
     st.markdown("### 🥋 FightGuru")
     st.markdown("---")
-    # Если пришли по кнопке навигации — переключаем вкладку
     if 'nav_page' in st.session_state and st.session_state['nav_page']:
         _default_nav = ["👤 Досье","🏛️ Пантеон","🏆 Турнир"].index(st.session_state['nav_page'])
         st.session_state['nav_page'] = None
@@ -558,8 +548,7 @@ if df is None:
     st.error(f"Файл '{DB_FILE}' не найден."); st.stop()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ТУРНИР — простая надёжная сетка
-# Алгоритм: фиксированные Y-позиции + линии по winner_id
+# ТУРНИР
 # ─────────────────────────────────────────────────────────────────────────────
 if nav == "🏆 Турнир":
     st.markdown("<h2 style='color:#f0f4ff;margin-bottom:16px'>🏆 Турнирная сетка</h2>",
@@ -575,7 +564,6 @@ if nav == "🏆 Турнир":
         'BR1':'Бой за бронзу','BR2':'Бой за бронзу',
     }
 
-    # Выбор турнира
     tour_df   = df[['tournament_name','date_start']].dropna().drop_duplicates('tournament_name')
     tour_list = tour_df.sort_values('date_start', ascending=False)['tournament_name'].tolist()
     sel_tour  = st.selectbox("Турнир", tour_list)
@@ -601,7 +589,6 @@ if nav == "🏆 Турнир":
         return cd[cd['round_code'].str.upper() == rc].copy().reset_index(drop=True)
 
     def render_match(m, medal=None):
-        """Рендерит одну карточку матча как HTML."""
         wid = str(m.get('winner_athlete_id','') or '')
         rid = str(m.get('red_id','') or '')
         bid = str(m.get('blue_id','') or '')
@@ -653,8 +640,6 @@ if nav == "🏆 Турнир":
             return str(m.get('red_full_name','')).strip(), str(m.get('red_last_name','')).strip(), str(m.get('red_nationality_code','')).upper()
         return str(m.get('blue_full_name','')).strip(), str(m.get('blue_last_name','')).strip(), str(m.get('blue_nationality_code','')).upper()
 
-    # ── ОСНОВНАЯ СЕТКА ────────────────────────────────────────────────────────
-    # Финал — показываем отдельно и крупно вверху
     final_rc = None
     for r in ['FNL','FIN']:
         if r in all_rc:
@@ -664,7 +649,6 @@ if nav == "🏆 Турнир":
         final_ms = get_rnd(final_rc)
         if not final_ms.empty:
             wname, wlast, wcnt = winner_of(final_ms)
-            # Победитель — большая карточка
             st.markdown(
                 f'<div style="background:linear-gradient(135deg,#1a0c0c,#161720);'
                 f'border:1px solid #c0392b44;border-radius:16px;padding:16px 18px;margin-bottom:16px">'
@@ -680,7 +664,6 @@ if nav == "🏆 Турнир":
                 unsafe_allow_html=True
             )
 
-    # Полуфиналы и раньше — показываем по раундам с вкладками
     semi_and_earlier = [r for r in main_present if r not in ('FNL','FIN')]
 
     if semi_and_earlier:
@@ -691,12 +674,10 @@ if nav == "🏆 Турнир":
             unsafe_allow_html=True
         )
 
-        # Показываем раунды в обратном порядке (от полуфинала к первому раунду)
         tab_labels = [ROUND_LABELS.get(r, r) for r in reversed(semi_and_earlier)]
         tab_rcs    = list(reversed(semi_and_earlier))
 
         if len(tab_rcs) == 1:
-            # Один раунд — без вкладок
             ms = get_rnd(tab_rcs[0])
             html = ''
             for _, m in ms.iterrows():
@@ -712,7 +693,6 @@ if nav == "🏆 Турнир":
                         html += render_match(m)
                     st.markdown(html, unsafe_allow_html=True)
 
-    # ── УТЕШИТЕЛЬНАЯ СЕТКА (только спортивное самбо) ─────────────────────────
     if not is_combat and (rep_present or brnz_present):
         st.markdown(
             "<p style='font-size:10px;font-weight:800;color:#b8860b;"
@@ -744,7 +724,6 @@ if nav == "🏆 Турнир":
                         html += render_match(m, medal=medal)
                     st.markdown(html, unsafe_allow_html=True)
 
-        # Два бронзовых призёра
         brnz_winners = []
         for rc in brnz_present:
             ms = get_rnd(rc)
@@ -765,11 +744,9 @@ if nav == "🏆 Турнир":
             bhtml += '</div>'
             st.markdown(bhtml, unsafe_allow_html=True)
 
-    # ── КНОПКИ ПЕРЕХОДА В ДОСЬЕ ───────────────────────────────────────────────
     st.markdown("")
     final_ms = get_rnd(final_rc) if final_rc else None
     wname, wlast, wcnt = winner_of(final_ms)
-    # Серебряный призёр — проигравший финала
     silver_name = silver_last = ""
     if final_ms is not None and not final_ms.empty:
         m_fin = final_ms.iloc[0]
@@ -784,7 +761,6 @@ if nav == "🏆 Турнир":
     nav_cols = st.columns(2)
     btn_i = 0
 
-    # 🥇 Чемпион
     with nav_cols[btn_i % 2]:
         if wname and st.button(f"🥇 Досье: {wname}", use_container_width=True, key="btn_gold"):
             st.session_state.sq = wlast; st.session_state.prev_sq = ""
@@ -793,7 +769,6 @@ if nav == "🏆 Турнир":
             st.rerun()
     btn_i += 1
 
-    # 🥈 Серебро
     if silver_name:
         with nav_cols[btn_i % 2]:
             if st.button(f"🥈 Досье: {silver_name}", use_container_width=True, key="btn_silver"):
@@ -803,7 +778,6 @@ if nav == "🏆 Турнир":
                 st.rerun()
         btn_i += 1
 
-    # 🥉 Бронза (только спортивное)
     if not is_combat:
         for bi, rc in enumerate(brnz_present):
             ms = get_rnd(rc)
@@ -860,8 +834,6 @@ if nav == "🏛️ Пантеон":
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ДОСЬЕ — ПОИСК
-# Используем value= без key= чтобы можно было писать в session_state.sq из кода.
-# on_change сбрасывает фильтр и выбор при новом вводе.
 # ─────────────────────────────────────────────────────────────────────────────
 def _on_change():
     new_val = st.session_state.get("_sq_inp","").strip()
@@ -932,9 +904,6 @@ for idx, row in matches.iterrows():
     if fn and fn not in athletes:
         athletes[fn] = {"country": cde}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ЭКРАН ВЫБОРА — ВСЯ КАРТОЧКА КЛИКАБЕЛЬНА
-# ─────────────────────────────────────────────────────────────────────────────
 if len(athletes) > 1 and st.session_state.sel not in athletes:
     st.markdown(
         f"<p style='font-size:16px;color:#dde0ef;margin-bottom:16px'>"
@@ -942,14 +911,12 @@ if len(athletes) > 1 and st.session_state.sel not in athletes:
         unsafe_allow_html=True
     )
     for aname, info in athletes.items():
-        # st.button занимает всю ширину — это и есть кликабельная карточка
         label = f"{fl(info['country'])}  {aname}  ·  {cn(info['country'])}"
         if st.button(label, key=f"pick_{aname}", use_container_width=True):
             st.session_state.sel = aname
             st.rerun()
     st.stop()
 
-# Выбор
 if st.session_state.sel in athletes:
     chosen = st.session_state.sel
 else:
@@ -1017,10 +984,7 @@ main_cat=""; main_cat_raw=""
 if 'category_code' in matches.columns:
     cc = matches['category_code'].value_counts()
     if not cc.empty:
-        # Берём категорию ПОСЛЕДНЕГО боя — наиболее актуальна для карточки
-        last_cat_raw = str(matches.iloc[0]['category_code']).upper()
-        # Но для отображения в профиле — самую частую (весовая категория)
-        main_cat_raw = last_cat_raw
+        main_cat_raw = str(matches.iloc[0]['category_code']).upper()
         main_cat     = get_cat(matches.iloc[0]['category_code'])
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1112,7 +1076,6 @@ tab_m, tab_i, tab_w, tab_s = st.tabs(["🥊 Матчи","🎙 Интервью",
 
 # ═══════════════  МАТЧИ  ═══════════════
 with tab_m:
-    # ФИЛЬТР — st.radio с CSS-стилизацией под pill-кнопки (надёжнее любых хаков)
     cur_filter = st.radio(
         "Фильтр",
         ["Все","Победы","Поражения","Финалы"],
@@ -1289,7 +1252,6 @@ with tab_s:
         if 'SAM' in c:  return 'SAM'
         return None
 
-    # Собираем все дисциплины в которых выступал атлет
     avail_discs = {}
     for _, row in matches.iterrows():
         cc   = str(row.get('category_code', '')).upper()
@@ -1297,7 +1259,6 @@ with tab_s:
         if disc and disc not in avail_discs:
             avail_discs[disc] = DISC_MAP.get(disc, disc)
 
-    # Выбор дисциплины — только если больше одной
     if len(avail_discs) > 1:
         disc_options = list(avail_discs.values())
         disc_keys    = list(avail_discs.keys())
@@ -1313,7 +1274,6 @@ with tab_s:
     else:
         sel_disc = None
 
-    # Фильтруем матчи по выбранной дисциплине
     if sel_disc:
         disc_matches = matches[
             matches['category_code'].str.upper().str.contains(sel_disc, na=False)
@@ -1325,7 +1285,6 @@ with tab_s:
         st.warning("Нет матчей по выбранной дисциплине.")
         st.stop()
 
-    # Пересчитываем статистику только по выбранной дисциплине
     disc_wins = disc_losses = disc_finals = 0
     for _, row in disc_matches.iterrows():
         is_r = str(row.get('red_full_name','')).lower().strip() == chosen_low
@@ -1339,7 +1298,6 @@ with tab_s:
     disc_total   = disc_wins + disc_losses
     disc_winrate = round(disc_wins / disc_total * 100) if disc_total else 0
 
-    # Определяем главную категорию выбранной дисциплины
     disc_cat_raw = ""
     disc_cat     = ""
     if not disc_matches.empty:
@@ -1348,7 +1306,7 @@ with tab_s:
             disc_cat_raw = str(cc2.index[0]).upper()
             disc_cat     = get_cat(cc2.index[0])
 
-    # ── Считаем статистику для карточки ──────────────────────────────────────
+    # ── Доп статистика ───────────────────────────────────────────────────────
     fastest = "—"
     try:
         win_times = []
@@ -1378,8 +1336,6 @@ with tab_s:
 
     last_title_year = "—"
     try:
-        # Берём год ПОСЛЕДНЕГО финала — неважно победил или нет
-        # matches отсортированы по date_start DESC — первый финал = самый свежий
         for _, row in disc_matches.iterrows():
             rc = str(row.get('round_code', '')).upper()
             if rc in ('FNL', 'FIN'):
@@ -1389,7 +1345,6 @@ with tab_s:
                     break
     except: pass
 
-    # Используем статистику по выбранной дисциплине
     _wins     = disc_wins
     _losses   = disc_losses
     _total    = disc_total
@@ -1397,7 +1352,6 @@ with tab_s:
     _finals_c = disc_finals
     _main_cat = disc_cat
 
-    # Пересчитываем streak по выбранной дисциплине
     _streak_n = 0
     _win_seq2 = []
     for _, row in disc_matches.iterrows():
@@ -1416,38 +1370,14 @@ with tab_s:
     flag_emoji   = fl(acountry)
     country_name = cn(acountry)
 
-    # Схватка (спортивное/пляжное) или Бой (боевое)
     _is_combat   = 'CSM' in main_cat_raw
     _fight_word  = "Боёв" if _is_combat else "Схваток"
-    _fight_word1 = "бой"  if _is_combat else "схватку"
 
-    # Streak dots
-    streak_html = ""
-    if _streak_n >= 2:
-        dots = "".join(
-            f'<div style="width:10px;height:10px;border-radius:50%;'
-            f'background:#2ecc71;flex-shrink:0"></div>'
-            for _ in range(min(_streak_n, 8))
-        )
-        streak_html = f"""
-        <div style="padding:12px 24px;background:#071a0f;
-                    border-top:1px solid #111;border-bottom:1px solid #111;
-                    display:flex;align-items:center;gap:12px">
-          <div style="display:flex;gap:6px">{dots}</div>
-          <span style="font-family:'Bebas Neue',Impact,sans-serif;
-                       font-size:22px;color:#2ecc71;letter-spacing:.1em">
-            {_streak_n} WIN STREAK
-          </span>
-        </div>"""
-
-
-    # Логотип в base64 для футера карточки
-    # На Streamlit Cloud файлы из GitHub доступны относительно рабочей директории
+    # ── Логотип ───────────────────────────────────────────────────────────────
     import base64 as _b64, os as _os
     _logo_b64 = ""
-    # Пробуем несколько возможных путей
     _logo_paths = [
-        "logo.png",                                          # рабочая директория
+        "logo.png",
         _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png"),
         _os.path.join(_os.getcwd(), "logo.png"),
     ]
@@ -1458,7 +1388,6 @@ with tab_s:
                     _logo_b64 = _b64.b64encode(_lf.read()).decode()
                 break
         except: pass
-    # Если всё ещё не нашли — попробуем glob
     if not _logo_b64:
         import glob as _glob
         found = _glob.glob("**/logo.png", recursive=True)
@@ -1466,100 +1395,230 @@ with tab_s:
             with open(found[0], "rb") as _lf:
                 _logo_b64 = _b64.b64encode(_lf.read()).decode()
     _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
-    _logo_html = (f'<img src="{_logo_src}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">' 
-                  if _logo_src else 
-                  '<div style="width:40px;height:40px;border-radius:50%;background:#c0392b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">FG</div>')
 
-    # Полная HTML страница — открывается в браузере
+    # Логотип в футере — изображение крупнее (96px), или плашка FG с большим размером
+    _logo_html = (
+        f'<img src="{_logo_src}" style="width:96px;height:96px;border-radius:50%;'
+        f'object-fit:cover;flex-shrink:0;box-shadow:0 0 28px rgba(192,57,43,.4)">'
+        if _logo_src else
+        '<div style="width:96px;height:96px;border-radius:50%;background:#c0392b;'
+        'display:flex;align-items:center;justify-content:center;'
+        'font-size:28px;font-weight:900;color:#fff;flex-shrink:0;'
+        'box-shadow:0 0 28px rgba(192,57,43,.4)">FG</div>'
+    )
+
+    # ── Последние буквы фамилии красным ──────────────────────────────────────
     _last_n_main = last_n[:-2] if len(last_n) >= 2 else last_n
     _last_n_end  = last_n[-2:] if len(last_n) >= 2 else ""
-    # Собираем streak HTML
+
+    # ── Streak block ─────────────────────────────────────────────────────────
     _streak_dots = "".join(
         '<div style="width:14px;height:14px;border-radius:50%;background:#2ecc71;flex-shrink:0"></div>'
         for _ in range(min(_streak_n, 8))
     )
     _streak_block = (
-        f'<div style="padding:28px 60px;background:#071a0f;border-bottom:1px solid #111;'
+        f'<div style="padding:24px 52px;background:#071a0f;border-bottom:2px solid #0d2a18;'
         f'display:flex;align-items:center;gap:16px">'
         f'<div style="display:flex;gap:8px">{_streak_dots}</div>'
-        f'<span style="font-family:Bebas Neue,Impact,sans-serif;font-size:44px;'
+        f'<span style="font-family:Bebas Neue,Impact,sans-serif;font-size:40px;'
         f'color:#2ecc71;letter-spacing:.1em">{_streak_n} WIN STREAK 🔥</span>'
         f'</div>'
     ) if _streak_n >= 2 else ""
 
+    # ── HTML карточка 1080×1920 ───────────────────────────────────────────────
     html_page = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1080">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
-<title>{final_name} - FightGuru</title>
+<title>{final_name} — FightGuru</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 html,body{{background:#060608;margin:0;padding:0}}
-.card{{width:1080px;min-height:1920px;background:#060608;font-family:Inter,sans-serif;display:flex;flex-direction:column}}
+.card{{
+  width:1080px;
+  min-height:1920px;
+  background:#060608;
+  font-family:Inter,sans-serif;
+  display:flex;
+  flex-direction:column;
+}}
 
-/* ЗОНА ФОТО — 620px */
-.hero{{display:flex;height:620px;background:#0d0d18;border-bottom:8px solid #c0392b}}
-.photo-box{{width:400px;min-width:400px;flex-shrink:0;background:#111122;
+/* ── HERO — 560px ─────────────────────────────────────────────────────────── */
+.hero{{
+  display:flex;
+  height:560px;
+  background:#0d0d18;
+  border-bottom:8px solid #c0392b;
+}}
+.photo-box{{
+  width:360px;min-width:360px;flex-shrink:0;
+  background:#111122;
   border-right:6px solid #c0392b;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px}}
-.photo-circle{{width:200px;height:200px;border-radius:50%;border:3px dashed #2a2d45;
-  display:flex;align-items:center;justify-content:center;font-size:72px;opacity:.3}}
-.photo-hint{{font-family:Inter,sans-serif;font-size:18px;color:#2a2d45;
-  text-transform:uppercase;letter-spacing:.12em;text-align:center;line-height:1.6}}
-.hero-info{{flex:1;display:flex;flex-direction:column;justify-content:flex-end;
-  padding:0 56px 50px 56px;min-width:0;overflow:hidden}}
-.f-first{{font-family:Inter,sans-serif;font-size:26px;font-weight:700;color:#6b6e85;
-  text-transform:uppercase;letter-spacing:.25em;margin-bottom:8px}}
-.f-last{{font-family:'Bebas Neue',Impact,sans-serif;font-size:120px;color:#fff;
-  letter-spacing:-.5px;line-height:.88;white-space:nowrap;overflow:hidden;
-  text-overflow:clip;margin-bottom:28px}}
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;
+}}
+.photo-circle{{
+  width:160px;height:160px;border-radius:50%;
+  border:3px dashed #2a2d45;
+  display:flex;align-items:center;justify-content:center;
+  font-size:58px;opacity:.3;
+}}
+.photo-hint{{
+  font-family:Inter,sans-serif;font-size:15px;color:#2a2d45;
+  text-transform:uppercase;letter-spacing:.12em;
+  text-align:center;line-height:1.6;
+}}
+.hero-info{{
+  flex:1;
+  display:flex;flex-direction:column;
+  justify-content:flex-end;
+  padding:0 48px 40px 48px;
+  min-width:0;overflow:hidden;
+}}
+.f-first{{
+  font-family:Inter,sans-serif;
+  font-size:22px;font-weight:700;color:#6b6e85;
+  text-transform:uppercase;letter-spacing:.28em;
+  margin-bottom:4px;
+}}
+.f-last{{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:108px;color:#fff;
+  letter-spacing:-.5px;line-height:.88;
+  white-space:nowrap;overflow:hidden;text-overflow:clip;
+  margin-bottom:18px;
+}}
 .f-last span{{color:#c0392b}}
-.f-country{{display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
-.f-cname{{font-family:Inter,sans-serif;font-size:24px;font-weight:700;color:#9093ab;
-  text-transform:uppercase;letter-spacing:.1em}}
-.f-weight{{border:1px solid #2a2d45;padding:6px 18px;font-family:Inter,sans-serif;
-  font-size:20px;color:#52566e;letter-spacing:.07em}}
-.f-age{{font-size:20px;color:#606480;margin-left:6px}}
 
-/* РЕКОРД — 240px */
-.record{{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid #111}}
-.rec{{padding:44px 10px;text-align:center;border-right:2px solid #111}}
+/* КАТЕГОРИЯ — крупно, читается с телефона */
+.f-category{{
+  font-family:Inter,sans-serif;
+  font-size:36px;font-weight:900;color:#e8ecff;
+  letter-spacing:-.5px;line-height:1.1;
+  margin-bottom:14px;
+}}
+/* СТРАНА + ВОЗРАСТ */
+.f-country{{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}}
+.f-flag{{font-size:36px;line-height:1;}}
+.f-cname{{
+  font-family:Inter,sans-serif;
+  font-size:22px;font-weight:700;color:#9093ab;
+  text-transform:uppercase;letter-spacing:.08em;
+}}
+/* ВОЗРАСТ — крупно и красным */
+.f-age{{
+  font-family:Inter,sans-serif;
+  font-size:34px;font-weight:900;color:#c0392b;
+  letter-spacing:-.3px;
+}}
+
+/* ── РЕКОРД — 210px ────────────────────────────────────────────────────────── */
+.record{{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  border-bottom:2px solid #111;
+}}
+.rec{{
+  padding:32px 10px;text-align:center;
+  border-right:2px solid #111;
+}}
 .rec:last-child{{border-right:none}}
-.rval{{font-family:'Bebas Neue',Impact,sans-serif;font-size:110px;line-height:1;margin-bottom:12px}}
-.rval.w{{color:#2ecc71}}.rval.l{{color:#c0392b}}.rval.n{{color:#f0f4ff}}.rval.y{{color:#f1c40f}}
-.rlbl{{font-family:Inter,sans-serif;font-size:20px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.12em;color:#9095b8}}
+.rval{{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:96px;line-height:1;margin-bottom:10px;
+}}
+.rval.w{{color:#2ecc71}}
+.rval.l{{color:#c0392b}}
+.rval.n{{color:#f0f4ff}}
+.rval.y{{color:#f1c40f}}
+.rlbl{{
+  font-family:Inter,sans-serif;
+  font-size:17px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.12em;
+  color:#9095b8;
+}}
 
-/* ПОЛОСА — 110px */
-.pct-bar{{padding:28px 60px 32px;border-bottom:2px solid #111}}
-.pct-row{{display:flex;justify-content:space-between;font-family:Inter,sans-serif;
-  font-size:22px;font-weight:700;margin-bottom:14px}}
-.track{{height:12px;background:#1a1c28;border-radius:6px;overflow:hidden}}
-.fill{{height:100%;background:#2ecc71;border-radius:6px;width:{_winrate}%}}
+/* ── WIN % BAR — 88px ───────────────────────────────────────────────────────── */
+.pct-bar{{padding:20px 52px 24px;border-bottom:2px solid #111;}}
+.pct-row{{
+  display:flex;justify-content:space-between;
+  font-family:Inter,sans-serif;font-size:20px;font-weight:700;
+  margin-bottom:12px;
+}}
+.track{{height:10px;background:#1a1c28;border-radius:5px;overflow:hidden;}}
+.fill{{height:100%;background:#2ecc71;border-radius:5px;width:{_winrate}%;}}
 
-/* ДОП СТАТИСТИКА — 2 ряда по 260px = 520px */
-.extra{{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:#111;border-bottom:2px solid #111}}
-.ec{{background:#060608;padding:56px 60px}}
-.ev{{font-family:'Bebas Neue',Impact,sans-serif;font-size:90px;line-height:1;margin-bottom:14px}}
-.ev.r{{color:#c0392b}}.ev.g{{color:#2ecc71}}.ev.w{{color:#f0f4ff}}.ev.y{{color:#f1c40f}}
-.el{{font-family:Inter,sans-serif;font-size:20px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.12em;color:#9095b8}}
+/* ── ДОП. СТАТИСТИКА — 4 ячейки ─────────────────────────────────────────────── */
+.extra{{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:2px;background:#111;
+  border-bottom:2px solid #111;
+  flex:1;
+}}
+.ec{{background:#060608;padding:42px 52px;}}
+.ev{{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:80px;line-height:1;margin-bottom:10px;
+}}
+.ev.r{{color:#c0392b}}
+.ev.g{{color:#2ecc71}}
+.ev.w{{color:#f0f4ff}}
+.ev.y{{color:#f1c40f}}
+.el{{
+  font-family:Inter,sans-serif;
+  font-size:17px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.12em;
+  color:#9095b8;
+}}
 
-/* ФУТЕР */
-.footer{{margin-top:auto;padding:50px 60px;display:flex;justify-content:space-between;align-items:center;
-  border-top:2px solid #1e2030}}
-.brand{{font-family:'Bebas Neue',Impact,sans-serif;font-size:70px;color:#c0392b;letter-spacing:.15em}}
-.brand-sub{{font-family:Inter,sans-serif;font-size:20px;color:#252840;
-  text-transform:uppercase;letter-spacing:.1em;margin-top:-8px}}
-.fias-txt{{font-family:Inter,sans-serif;font-size:20px;color:#252840;
-  text-transform:uppercase;letter-spacing:.07em;text-align:right;line-height:1.8}}
+/* ── ФУТЕР ─────────────────────────────────────────────────────────────────── */
+/* Логотип (круг) визуально крупнее текста FIGHTGURU */
+.footer{{
+  padding:42px 52px;
+  display:flex;justify-content:space-between;align-items:center;
+  border-top:3px solid #1e2030;
+  margin-top:auto;
+}}
+.footer-left{{display:flex;align-items:center;gap:22px;}}
+.logo-circle{{
+  width:100px;height:100px;border-radius:50%;
+  flex-shrink:0;
+  box-shadow:0 0 32px rgba(192,57,43,.45);
+  object-fit:cover;
+}}
+.logo-placeholder{{
+  width:100px;height:100px;border-radius:50%;
+  background:#c0392b;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:30px;font-weight:900;color:#fff;
+  box-shadow:0 0 32px rgba(192,57,43,.45);
+}}
+/* FIGHTGURU текст — меньше логотипа */
+.brand{{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:46px;color:#c0392b;letter-spacing:.15em;line-height:1;
+}}
+.brand-sub{{
+  font-family:Inter,sans-serif;
+  font-size:16px;color:#252840;
+  text-transform:uppercase;letter-spacing:.1em;
+  margin-top:3px;
+}}
+.fias-txt{{
+  font-family:Inter,sans-serif;
+  font-size:18px;color:#252840;
+  text-transform:uppercase;letter-spacing:.07em;
+  text-align:right;line-height:1.9;
+}}
 </style>
 </head>
 <body>
 <div class="card">
 
+  <!-- HERO -->
   <div class="hero">
     <div class="photo-box">
       <div class="photo-circle">📷</div>
@@ -1568,15 +1627,16 @@ html,body{{background:#060608;margin:0;padding:0}}
     <div class="hero-info">
       <div class="f-first">{first_n}</div>
       <div class="f-last">{_last_n_main}<span>{_last_n_end}</span></div>
+      <div class="f-category">{_main_cat}</div>
       <div class="f-country">
-        <span style="font-size:42px">{flag_emoji}</span>
+        <span class="f-flag">{flag_emoji}</span>
         <span class="f-cname">{country_name}</span>
-        <span class="f-weight">{_main_cat}</span>
         <span class="f-age">{age_str}</span>
       </div>
     </div>
   </div>
 
+  <!-- РЕКОРД -->
   <div class="record">
     <div class="rec"><div class="rval n">{_total}</div><div class="rlbl">{_fight_word}</div></div>
     <div class="rec"><div class="rval w">{_wins}</div><div class="rlbl">Победы</div></div>
@@ -1584,6 +1644,7 @@ html,body{{background:#060608;margin:0;padding:0}}
     <div class="rec"><div class="rval y">{_winrate}%</div><div class="rlbl">% побед</div></div>
   </div>
 
+  <!-- WIN BAR -->
   <div class="pct-bar">
     <div class="pct-row">
       <span style="color:#2ecc71">{_wins} побед</span>
@@ -1592,8 +1653,10 @@ html,body{{background:#060608;margin:0;padding:0}}
     <div class="track"><div class="fill"></div></div>
   </div>
 
+  <!-- STREAK (только если есть серия) -->
   {_streak_block}
 
+  <!-- ДОП. СТАТИСТИКА -->
   <div class="extra">
     <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
     <div class="ec"><div class="ev g">{_finals_c}</div><div class="el">Финалы в карьере</div></div>
@@ -1601,8 +1664,9 @@ html,body{{background:#060608;margin:0;padding:0}}
     <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
   </div>
 
+  <!-- ФУТЕР -->
   <div class="footer">
-    <div style="display:flex;align-items:center;gap:20px">
+    <div class="footer-left">
       {_logo_html}
       <div>
         <div class="brand">FIGHTGURU</div>
@@ -1616,7 +1680,7 @@ html,body{{background:#060608;margin:0;padding:0}}
 </body>
 </html>"""
 
-    # Скачивание HTML — открой в Chrome, печать → PDF → Фотошоп
+    # ── Скачивание ────────────────────────────────────────────────────────────
     st.download_button(
         label="⬇️ Скачать карточку HTML",
         data=html_page.encode('utf-8'),
