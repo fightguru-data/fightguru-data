@@ -1479,10 +1479,10 @@ with tab_s:
         for _ in range(min(_streak_n, 8))
     )
     _streak_block = (
-        f'<div style="padding:20px 60px;background:#071a0f;border-bottom:1px solid #111;'
+        f'<div style="padding:28px 60px;background:#071a0f;border-bottom:1px solid #111;'
         f'display:flex;align-items:center;gap:16px">'
         f'<div style="display:flex;gap:8px">{_streak_dots}</div>'
-        f'<span style="font-family:Bebas Neue,Impact,sans-serif;font-size:36px;'
+        f'<span style="font-family:Bebas Neue,Impact,sans-serif;font-size:44px;'
         f'color:#2ecc71;letter-spacing:.1em">{_streak_n} WIN STREAK 🔥</span>'
         f'</div>'
     ) if _streak_n >= 2 else ""
@@ -1497,63 +1497,63 @@ with tab_s:
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 html,body{{background:#060608;margin:0;padding:0}}
-.card{{width:1080px;background:#060608;font-family:Inter,sans-serif}}
+.card{{width:1080px;min-height:1920px;background:#060608;font-family:Inter,sans-serif;display:flex;flex-direction:column}}
 
-/* ЗОНА ФОТО */
-.hero{{display:flex;height:480px;background:#0d0d18;border-bottom:8px solid #c0392b}}
-.photo-box{{width:380px;min-width:380px;flex-shrink:0;background:#111122;
+/* ЗОНА ФОТО — 620px */
+.hero{{display:flex;height:620px;background:#0d0d18;border-bottom:8px solid #c0392b}}
+.photo-box{{width:400px;min-width:400px;flex-shrink:0;background:#111122;
   border-right:6px solid #c0392b;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}}
-.photo-circle{{width:160px;height:160px;border-radius:50%;border:3px dashed #2a2d45;
-  display:flex;align-items:center;justify-content:center;font-size:60px;opacity:.3}}
-.photo-hint{{font-family:Inter,sans-serif;font-size:16px;color:#2a2d45;
-  text-transform:uppercase;letter-spacing:.12em;text-align:center}}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px}}
+.photo-circle{{width:200px;height:200px;border-radius:50%;border:3px dashed #2a2d45;
+  display:flex;align-items:center;justify-content:center;font-size:72px;opacity:.3}}
+.photo-hint{{font-family:Inter,sans-serif;font-size:18px;color:#2a2d45;
+  text-transform:uppercase;letter-spacing:.12em;text-align:center;line-height:1.6}}
 .hero-info{{flex:1;display:flex;flex-direction:column;justify-content:flex-end;
-  padding:0 50px 40px 50px;min-width:0;overflow:hidden}}
-.f-first{{font-family:Inter,sans-serif;font-size:24px;font-weight:700;color:#6b6e85;
-  text-transform:uppercase;letter-spacing:.25em;margin-bottom:6px}}
-.f-last{{font-family:'Bebas Neue',Impact,sans-serif;font-size:110px;color:#fff;
+  padding:0 56px 50px 56px;min-width:0;overflow:hidden}}
+.f-first{{font-family:Inter,sans-serif;font-size:26px;font-weight:700;color:#6b6e85;
+  text-transform:uppercase;letter-spacing:.25em;margin-bottom:8px}}
+.f-last{{font-family:'Bebas Neue',Impact,sans-serif;font-size:120px;color:#fff;
   letter-spacing:-.5px;line-height:.88;white-space:nowrap;overflow:hidden;
-  text-overflow:clip;margin-bottom:24px}}
+  text-overflow:clip;margin-bottom:28px}}
 .f-last span{{color:#c0392b}}
-.f-country{{display:flex;align-items:center;gap:14px;flex-wrap:wrap}}
-.f-cname{{font-family:Inter,sans-serif;font-size:22px;font-weight:700;color:#9093ab;
+.f-country{{display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
+.f-cname{{font-family:Inter,sans-serif;font-size:24px;font-weight:700;color:#9093ab;
   text-transform:uppercase;letter-spacing:.1em}}
-.f-weight{{border:1px solid #2a2d45;padding:5px 16px;font-family:Inter,sans-serif;
-  font-size:18px;color:#52566e;letter-spacing:.07em}}
-.f-age{{font-size:18px;color:#606480;margin-left:4px}}
+.f-weight{{border:1px solid #2a2d45;padding:6px 18px;font-family:Inter,sans-serif;
+  font-size:20px;color:#52566e;letter-spacing:.07em}}
+.f-age{{font-size:20px;color:#606480;margin-left:6px}}
 
-/* РЕКОРД */
+/* РЕКОРД — 240px */
 .record{{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid #111}}
-.rec{{padding:36px 10px;text-align:center;border-right:2px solid #111}}
+.rec{{padding:44px 10px;text-align:center;border-right:2px solid #111}}
 .rec:last-child{{border-right:none}}
-.rval{{font-family:'Bebas Neue',Impact,sans-serif;font-size:100px;line-height:1;margin-bottom:10px}}
+.rval{{font-family:'Bebas Neue',Impact,sans-serif;font-size:110px;line-height:1;margin-bottom:12px}}
 .rval.w{{color:#2ecc71}}.rval.l{{color:#c0392b}}.rval.n{{color:#f0f4ff}}.rval.y{{color:#f1c40f}}
-.rlbl{{font-family:Inter,sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;
+.rlbl{{font-family:Inter,sans-serif;font-size:20px;font-weight:700;text-transform:uppercase;
   letter-spacing:.12em;color:#9095b8}}
 
-/* ПОЛОСА */
-.pct-bar{{padding:24px 60px 28px;border-bottom:2px solid #111}}
+/* ПОЛОСА — 110px */
+.pct-bar{{padding:28px 60px 32px;border-bottom:2px solid #111}}
 .pct-row{{display:flex;justify-content:space-between;font-family:Inter,sans-serif;
-  font-size:20px;font-weight:700;margin-bottom:12px}}
-.track{{height:10px;background:#1a1c28;border-radius:5px;overflow:hidden}}
-.fill{{height:100%;background:#2ecc71;border-radius:5px;width:{_winrate}%}}
+  font-size:22px;font-weight:700;margin-bottom:14px}}
+.track{{height:12px;background:#1a1c28;border-radius:6px;overflow:hidden}}
+.fill{{height:100%;background:#2ecc71;border-radius:6px;width:{_winrate}%}}
 
-/* ДОП СТАТИСТИКА */
+/* ДОП СТАТИСТИКА — 2 ряда по 260px = 520px */
 .extra{{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:#111;border-bottom:2px solid #111}}
-.ec{{background:#060608;padding:36px 50px}}
-.ev{{font-family:'Bebas Neue',Impact,sans-serif;font-size:72px;line-height:1;margin-bottom:10px}}
+.ec{{background:#060608;padding:56px 60px}}
+.ev{{font-family:'Bebas Neue',Impact,sans-serif;font-size:90px;line-height:1;margin-bottom:14px}}
 .ev.r{{color:#c0392b}}.ev.g{{color:#2ecc71}}.ev.w{{color:#f0f4ff}}.ev.y{{color:#f1c40f}}
-.el{{font-family:Inter,sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;
+.el{{font-family:Inter,sans-serif;font-size:20px;font-weight:700;text-transform:uppercase;
   letter-spacing:.12em;color:#9095b8}}
 
 /* ФУТЕР */
-.footer{{padding:36px 60px;display:flex;justify-content:space-between;align-items:center;
+.footer{{margin-top:auto;padding:50px 60px;display:flex;justify-content:space-between;align-items:center;
   border-top:2px solid #1e2030}}
-.brand{{font-family:'Bebas Neue',Impact,sans-serif;font-size:60px;color:#c0392b;letter-spacing:.15em}}
-.brand-sub{{font-family:Inter,sans-serif;font-size:18px;color:#252840;
-  text-transform:uppercase;letter-spacing:.1em;margin-top:-6px}}
-.fias-txt{{font-family:Inter,sans-serif;font-size:18px;color:#252840;
+.brand{{font-family:'Bebas Neue',Impact,sans-serif;font-size:70px;color:#c0392b;letter-spacing:.15em}}
+.brand-sub{{font-family:Inter,sans-serif;font-size:20px;color:#252840;
+  text-transform:uppercase;letter-spacing:.1em;margin-top:-8px}}
+.fias-txt{{font-family:Inter,sans-serif;font-size:20px;color:#252840;
   text-transform:uppercase;letter-spacing:.07em;text-align:right;line-height:1.8}}
 </style>
 </head>
