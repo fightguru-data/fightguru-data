@@ -1273,7 +1273,7 @@ st.markdown("<hr style='border-color:#111318;margin-top:50px'>"
 # ═══════════════  СТОРИС  ═══════════════
 with tab_s:
     st.markdown("#### 📸 Карточка для сторис")
-    st.caption("Открой в Safari → сделай скриншот → обрежь → в сторис")
+    st.caption("Скачай HTML → открой в Chrome → Файл → Печать → Сохранить как PDF → в Фотошоп")
 
     # ── Определяем доступные дисциплины для этого атлета ─────────────────────
     DISC_MAP = {
@@ -1585,23 +1585,28 @@ with tab_s:
         "</div>\n</div>\n</body>\n</html>"
     )
 
-    # Показываем карточку через components.html
-    # Bebas Neue теперь в основном CSS приложения и кэшируется браузером
-    import streamlit.components.v1 as components
-    components.html(html_page, height=660, scrolling=False)
+    # Скачивание HTML — открой в Chrome, печать → PDF → Фотошоп
+    st.download_button(
+        label="⬇️ Скачать карточку HTML",
+        data=html_page.encode('utf-8'),
+        file_name=f"{final_name.replace(' ','_')}_story.html",
+        mime="text/html",
+        type="primary",
+        use_container_width=True,
+    )
 
     st.markdown("""
     <div style='background:#161720;border:1px solid #272a3a;border-radius:12px;
     padding:14px 18px;margin-top:12px;line-height:1.9'>
     <div style='font-size:14px;font-weight:700;color:#f0f4ff;margin-bottom:8px'>
-      📲 Как сохранить на iPhone:
+      💻 Как открыть в Фотошопе:
     </div>
     <div style='font-size:13px;color:#9093ab'>
-      1. Сделай <b style='color:#f0f4ff'>скриншот</b> — боковая кнопка + кнопка громкости<br>
-      2. Открой скриншот в Фото → нажми <b style='color:#f0f4ff'>Редактировать</b><br>
-      3. Обрежь — оставь только карточку<br>
-      4. Открой в <b style='color:#f0f4ff'>Canva</b> → вставь фото бойца поверх рамки<br>
-      5. Сохрани и закидывай в сторис 🔥
+      1. Нажми <b style='color:#f0f4ff'>Скачать карточку HTML</b><br>
+      2. Открой файл в <b style='color:#f0f4ff'>Chrome</b><br>
+      3. <b style='color:#f0f4ff'>⌘+P</b> (Печать) → в списке принтеров выбери <b style='color:#f0f4ff'>Сохранить как PDF</b><br>
+      4. Открой PDF в <b style='color:#f0f4ff'>Фотошопе</b> — карточка будет с нормальным разрешением<br>
+      5. Вставь фото бойца, сохрани и закидывай в сторис 🔥
     </div>
     </div>
     """, unsafe_allow_html=True)
