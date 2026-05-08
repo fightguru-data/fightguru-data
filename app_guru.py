@@ -1396,15 +1396,11 @@ with tab_s:
                 _logo_b64 = _b64.b64encode(_lf.read()).decode()
     _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
 
-    # Логотип в футере — изображение крупнее (96px), или плашка FG с большим размером
+    # Логотип в футере — 46px круг
     _logo_html = (
-        f'<img src="{_logo_src}" style="width:96px;height:96px;border-radius:50%;'
-        f'object-fit:cover;flex-shrink:0;box-shadow:0 0 28px rgba(192,57,43,.4)">'
+        f'<img src="{_logo_src}" class="logo-img">'
         if _logo_src else
-        '<div style="width:96px;height:96px;border-radius:50%;background:#c0392b;'
-        'display:flex;align-items:center;justify-content:center;'
-        'font-size:28px;font-weight:900;color:#fff;flex-shrink:0;'
-        'box-shadow:0 0 28px rgba(192,57,43,.4)">FG</div>'
+        '<div class="logo-ph">FG</div>'
     )
 
     # ── Последние буквы фамилии красным ──────────────────────────────────────
@@ -1417,218 +1413,296 @@ with tab_s:
         for _ in range(min(_streak_n, 8))
     )
     _streak_block = (
-        f'<div style="padding:24px 52px;background:#071a0f;border-bottom:2px solid #0d2a18;'
-        f'display:flex;align-items:center;gap:16px">'
-        f'<div style="display:flex;gap:8px">{_streak_dots}</div>'
-        f'<span style="font-family:Bebas Neue,Impact,sans-serif;font-size:40px;'
-        f'color:#2ecc71;letter-spacing:.1em">{_streak_n} WIN STREAK 🔥</span>'
+        f'<div class="streak">'
+        f'<div class="s-dots">'
+        + "".join(f'<div class="s-dot"></div>' for _ in range(min(_streak_n, 8)))
+        + f'</div>'
+        f'<span class="s-txt">{_streak_n} WIN STREAK &#128293;</span>'
         f'</div>'
     ) if _streak_n >= 2 else ""
 
-    # ── HTML карточка 1080×1920 ───────────────────────────────────────────────
+    # ── HTML карточка 536×866 (пропорции скриншота) ──────────────────────────
     html_page = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1080">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=536">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
 <title>{final_name} — FightGuru</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-html,body{{background:#060608;margin:0;padding:0}}
+html,body{{background:#060608;margin:0;padding:0;width:536px}}
+
+/* ═══════════════════════════════════════════════════════
+   КАРТОЧКА  536 × 866 px
+   Типографика: Bebas Neue (display/цифры) + Inter (UI)
+   Иерархия: фамилия → категория → страна/возраст →
+             рекорд → win-bar → streak → статы → бренд
+═══════════════════════════════════════════════════════ */
 .card{{
-  width:1080px;
-  min-height:1920px;
+  width:536px;
+  height:866px;
   background:#060608;
-  font-family:Inter,sans-serif;
   display:flex;
   flex-direction:column;
+  overflow:hidden;
+  font-family:'Inter',sans-serif;
 }}
 
-/* ── HERO — 560px ─────────────────────────────────────────────────────────── */
+/* ─── HERO  268 px ─────────────────────────────────── */
 .hero{{
   display:flex;
-  height:560px;
+  height:268px;
+  flex-shrink:0;
   background:#0d0d18;
-  border-bottom:8px solid #c0392b;
+  border-bottom:4px solid #c0392b;
 }}
-.photo-box{{
-  width:360px;min-width:360px;flex-shrink:0;
-  background:#111122;
-  border-right:6px solid #c0392b;
+
+/* Колонка фото — 42% ширины */
+.photo-col{{
+  width:225px;min-width:225px;
+  flex-shrink:0;
+  background:#0b0b16;
+  border-right:3px solid #c0392b;
   display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:18px;
+  align-items:center;justify-content:center;
+  gap:10px;
+  position:relative;
 }}
-.photo-circle{{
-  width:160px;height:160px;border-radius:50%;
-  border:3px dashed #2a2d45;
+.photo-icon{{
+  width:72px;height:72px;border-radius:50%;
+  border:2px dashed #222436;
   display:flex;align-items:center;justify-content:center;
-  font-size:58px;opacity:.3;
+  opacity:.25;
 }}
-.photo-hint{{
-  font-family:Inter,sans-serif;font-size:15px;color:#2a2d45;
-  text-transform:uppercase;letter-spacing:.12em;
-  text-align:center;line-height:1.6;
+.photo-icon svg{{width:32px;height:32px;fill:#555;}}
+.photo-lbl{{
+  font-size:9px;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;color:#222436;
+  text-align:center;line-height:1.7;
 }}
-.hero-info{{
+
+/* Колонка имени — flex:1 */
+.name-col{{
   flex:1;
   display:flex;flex-direction:column;
   justify-content:flex-end;
-  padding:0 48px 40px 48px;
+  padding:0 22px 18px 20px;
   min-width:0;overflow:hidden;
 }}
+
+/* Имя — мелко, Inter, широкий трекинг */
 .f-first{{
-  font-family:Inter,sans-serif;
-  font-size:22px;font-weight:700;color:#6b6e85;
-  text-transform:uppercase;letter-spacing:.28em;
-  margin-bottom:4px;
+  font-size:10px;
+  font-weight:700;
+  color:#52566e;
+  text-transform:uppercase;
+  letter-spacing:.3em;
+  margin-bottom:2px;
+  line-height:1;
 }}
+
+/* Фамилия — Bebas Neue, крупно, последние 2 буквы красные */
 .f-last{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:108px;color:#fff;
-  letter-spacing:-.5px;line-height:.88;
-  white-space:nowrap;overflow:hidden;text-overflow:clip;
-  margin-bottom:18px;
+  font-size:54px;
+  color:#f0f4ff;
+  line-height:.9;
+  letter-spacing:.01em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:clip;
+  margin-bottom:10px;
 }}
-.f-last span{{color:#c0392b}}
+.f-last .red{{color:#c0392b;}}
 
-/* КАТЕГОРИЯ — крупно, читается с телефона */
-.f-category{{
-  font-family:Inter,sans-serif;
-  font-size:36px;font-weight:900;color:#e8ecff;
-  letter-spacing:-.5px;line-height:1.1;
-  margin-bottom:14px;
+/* Категория — главная строка, жирная, белая, хорошо читается */
+.f-cat{{
+  font-size:13px;
+  font-weight:800;
+  color:#dde0ef;
+  letter-spacing:.02em;
+  line-height:1.2;
+  margin-bottom:8px;
 }}
-/* СТРАНА + ВОЗРАСТ */
-.f-country{{
-  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+
+/* Страна + возраст — одна строка */
+.f-meta{{
+  display:flex;
+  align-items:center;
+  gap:8px;
 }}
-.f-flag{{font-size:36px;line-height:1;}}
+.f-flag{{font-size:18px;line-height:1;flex-shrink:0;}}
 .f-cname{{
-  font-family:Inter,sans-serif;
-  font-size:22px;font-weight:700;color:#9093ab;
-  text-transform:uppercase;letter-spacing:.08em;
+  font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.12em;
+  color:#7880a0;
 }}
-/* ВОЗРАСТ — крупно и красным */
+/* Возраст — красный акцент, но не кричащий */
 .f-age{{
-  font-family:Inter,sans-serif;
-  font-size:34px;font-weight:900;color:#c0392b;
-  letter-spacing:-.3px;
+  font-size:11px;font-weight:700;
+  color:#c0392b;
+  letter-spacing:.04em;
+  margin-left:2px;
 }}
 
-/* ── РЕКОРД — 210px ────────────────────────────────────────────────────────── */
+/* ─── РЕКОРД  148 px ───────────────────────────────── */
 .record{{
-  display:grid;grid-template-columns:repeat(4,1fr);
-  border-bottom:2px solid #111;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  height:148px;
+  flex-shrink:0;
+  border-bottom:1px solid #111318;
 }}
 .rec{{
-  padding:32px 10px;text-align:center;
-  border-right:2px solid #111;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:5px;
+  border-right:1px solid #111318;
 }}
-.rec:last-child{{border-right:none}}
-.rval{{
+.rec:last-child{{border-right:none;}}
+.rv{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:96px;line-height:1;margin-bottom:10px;
+  font-size:48px;line-height:1;
 }}
-.rval.w{{color:#2ecc71}}
-.rval.l{{color:#c0392b}}
-.rval.n{{color:#f0f4ff}}
-.rval.y{{color:#f1c40f}}
-.rlbl{{
-  font-family:Inter,sans-serif;
-  font-size:17px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.12em;
-  color:#9095b8;
+.rv.n{{color:#f0f4ff;}}
+.rv.g{{color:#27ae60;}}
+.rv.r{{color:#c0392b;}}
+.rv.y{{color:#e6b800;}}
+.rl{{
+  font-size:8px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.14em;
+  color:#52566e;
 }}
 
-/* ── WIN % BAR — 88px ───────────────────────────────────────────────────────── */
-.pct-bar{{padding:20px 52px 24px;border-bottom:2px solid #111;}}
-.pct-row{{
+/* ─── WIN BAR  62 px ───────────────────────────────── */
+.pbar{{
+  height:62px;
+  flex-shrink:0;
+  display:flex;flex-direction:column;
+  justify-content:center;
+  padding:0 20px;
+  border-bottom:1px solid #111318;
+  gap:8px;
+}}
+.pbar-row{{
   display:flex;justify-content:space-between;
-  font-family:Inter,sans-serif;font-size:20px;font-weight:700;
-  margin-bottom:12px;
+  align-items:baseline;
 }}
-.track{{height:10px;background:#1a1c28;border-radius:5px;overflow:hidden;}}
-.fill{{height:100%;background:#2ecc71;border-radius:5px;width:{_winrate}%;}}
+.pbar-wins{{font-size:11px;font-weight:700;color:#27ae60;}}
+.pbar-src{{font-size:9px;font-weight:500;color:#30334a;letter-spacing:.08em;}}
+.pbar-track{{height:3px;background:#161720;border-radius:2px;overflow:hidden;}}
+.pbar-fill{{height:100%;background:#27ae60;border-radius:2px;width:{_winrate}%;}}
 
-/* ── ДОП. СТАТИСТИКА — 4 ячейки ─────────────────────────────────────────────── */
+/* ─── STREAK  56 px (только если есть) ────────────── */
+.streak{{
+  height:56px;
+  flex-shrink:0;
+  background:#04110a;
+  border-bottom:1px solid #0a2018;
+  display:flex;align-items:center;
+  padding:0 20px;
+  gap:10px;
+}}
+.s-dots{{display:flex;gap:5px;}}
+.s-dot{{
+  width:8px;height:8px;border-radius:50%;
+  background:#27ae60;flex-shrink:0;
+}}
+.s-txt{{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:20px;letter-spacing:.1em;color:#27ae60;
+}}
+
+/* ─── 4 ЯЧЕЙКИ СТАТЫ  flex:1 ──────────────────────── */
 .extra{{
   display:grid;grid-template-columns:1fr 1fr;
-  gap:2px;background:#111;
-  border-bottom:2px solid #111;
+  grid-template-rows:1fr 1fr;
+  gap:1px;background:#111318;
   flex:1;
 }}
-.ec{{background:#060608;padding:42px 52px;}}
+.ec{{
+  background:#060608;
+  display:flex;flex-direction:column;
+  justify-content:center;
+  padding:0 20px;
+  gap:4px;
+}}
 .ev{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:80px;line-height:1;margin-bottom:10px;
+  font-size:38px;line-height:1;
 }}
-.ev.r{{color:#c0392b}}
-.ev.g{{color:#2ecc71}}
-.ev.w{{color:#f0f4ff}}
-.ev.y{{color:#f1c40f}}
+.ev.r{{color:#c0392b;}}
+.ev.g{{color:#27ae60;}}
+.ev.w{{color:#e8ecff;}}
+.ev.y{{color:#e6b800;}}
 .el{{
-  font-family:Inter,sans-serif;
-  font-size:17px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.12em;
-  color:#9095b8;
+  font-size:8px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.14em;
+  color:#30334a;
 }}
 
-/* ── ФУТЕР ─────────────────────────────────────────────────────────────────── */
-/* Логотип (круг) визуально крупнее текста FIGHTGURU */
+/* ─── ФУТЕР  76 px ─────────────────────────────────── */
 .footer{{
-  padding:42px 52px;
-  display:flex;justify-content:space-between;align-items:center;
-  border-top:3px solid #1e2030;
-  margin-top:auto;
-}}
-.footer-left{{display:flex;align-items:center;gap:22px;}}
-.logo-circle{{
-  width:100px;height:100px;border-radius:50%;
+  height:76px;
   flex-shrink:0;
-  box-shadow:0 0 32px rgba(192,57,43,.45);
-  object-fit:cover;
+  display:flex;align-items:center;
+  justify-content:space-between;
+  padding:0 20px;
+  border-top:1px solid #111318;
+  background:#060608;
 }}
-.logo-placeholder{{
-  width:100px;height:100px;border-radius:50%;
+.footer-left{{display:flex;align-items:center;gap:12px;}}
+
+/* Логотип-круг — 46px, визуально крупнее текста бренда */
+.logo-img{{
+  width:46px;height:46px;border-radius:50%;
+  object-fit:cover;flex-shrink:0;
+}}
+.logo-ph{{
+  width:46px;height:46px;border-radius:50%;
   background:#c0392b;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  font-size:30px;font-weight:900;color:#fff;
-  box-shadow:0 0 32px rgba(192,57,43,.45);
+  font-size:13px;font-weight:900;color:#fff;
+  letter-spacing:.02em;
 }}
-/* FIGHTGURU текст — меньше логотипа */
+/* Бренд: FIGHTGURU — 24px Bebas, под логотипом визуально тихий */
 .brand{{
   font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:46px;color:#c0392b;letter-spacing:.15em;line-height:1;
+  font-size:24px;letter-spacing:.18em;color:#c0392b;
+  line-height:1;
 }}
 .brand-sub{{
-  font-family:Inter,sans-serif;
-  font-size:16px;color:#252840;
-  text-transform:uppercase;letter-spacing:.1em;
-  margin-top:3px;
+  font-size:7px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:#1e2130;
+  margin-top:2px;
 }}
-.fias-txt{{
-  font-family:Inter,sans-serif;
-  font-size:18px;color:#252840;
-  text-transform:uppercase;letter-spacing:.07em;
-  text-align:right;line-height:1.9;
+.fias{{
+  font-size:8px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.1em;
+  color:#1e2130;text-align:right;line-height:1.9;
 }}
 </style>
 </head>
 <body>
 <div class="card">
 
-  <!-- HERO -->
+  <!-- ═══ HERO ═══ -->
   <div class="hero">
-    <div class="photo-box">
-      <div class="photo-circle">📷</div>
-      <div class="photo-hint">Место<br>для фото</div>
+    <div class="photo-col">
+      <div class="photo-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0 0"/>
+          <path d="M9 3L7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
+        </svg>
+      </div>
+      <div class="photo-lbl">Место<br>для фото</div>
     </div>
-    <div class="hero-info">
+    <div class="name-col">
       <div class="f-first">{first_n}</div>
-      <div class="f-last">{_last_n_main}<span>{_last_n_end}</span></div>
-      <div class="f-category">{_main_cat}</div>
-      <div class="f-country">
+      <div class="f-last">{_last_n_main}<span class="red">{_last_n_end}</span></div>
+      <div class="f-cat">{_main_cat}</div>
+      <div class="f-meta">
         <span class="f-flag">{flag_emoji}</span>
         <span class="f-cname">{country_name}</span>
         <span class="f-age">{age_str}</span>
@@ -1636,27 +1710,27 @@ html,body{{background:#060608;margin:0;padding:0}}
     </div>
   </div>
 
-  <!-- РЕКОРД -->
+  <!-- ═══ РЕКОРД ═══ -->
   <div class="record">
-    <div class="rec"><div class="rval n">{_total}</div><div class="rlbl">{_fight_word}</div></div>
-    <div class="rec"><div class="rval w">{_wins}</div><div class="rlbl">Победы</div></div>
-    <div class="rec"><div class="rval l">{_losses}</div><div class="rlbl">Пораж.</div></div>
-    <div class="rec"><div class="rval y">{_winrate}%</div><div class="rlbl">% побед</div></div>
+    <div class="rec"><div class="rv n">{_total}</div><div class="rl">{_fight_word}</div></div>
+    <div class="rec"><div class="rv g">{_wins}</div><div class="rl">Победы</div></div>
+    <div class="rec"><div class="rv r">{_losses}</div><div class="rl">Пораж.</div></div>
+    <div class="rec"><div class="rv y">{_winrate}%</div><div class="rl">% побед</div></div>
   </div>
 
-  <!-- WIN BAR -->
-  <div class="pct-bar">
-    <div class="pct-row">
-      <span style="color:#2ecc71">{_wins} побед</span>
-      <span style="color:#7880a0">FIAS · 2021–2026</span>
+  <!-- ═══ WIN BAR ═══ -->
+  <div class="pbar">
+    <div class="pbar-row">
+      <span class="pbar-wins">{_wins} побед</span>
+      <span class="pbar-src">FIAS · 2021–2026</span>
     </div>
-    <div class="track"><div class="fill"></div></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
   </div>
 
-  <!-- STREAK (только если есть серия) -->
+  <!-- ═══ STREAK (если есть) ═══ -->
   {_streak_block}
 
-  <!-- ДОП. СТАТИСТИКА -->
+  <!-- ═══ 4 ЯЧЕЙКИ ═══ -->
   <div class="extra">
     <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
     <div class="ec"><div class="ev g">{_finals_c}</div><div class="el">Финалы в карьере</div></div>
@@ -1664,7 +1738,7 @@ html,body{{background:#060608;margin:0;padding:0}}
     <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
   </div>
 
-  <!-- ФУТЕР -->
+  <!-- ═══ ФУТЕР ═══ -->
   <div class="footer">
     <div class="footer-left">
       {_logo_html}
@@ -1673,7 +1747,7 @@ html,body{{background:#060608;margin:0;padding:0}}
         <div class="brand-sub">Sambo Stats Portal</div>
       </div>
     </div>
-    <div class="fias-txt">Официальная<br>статистика FIAS</div>
+    <div class="fias">Официальная<br>статистика FIAS</div>
   </div>
 
 </div>
