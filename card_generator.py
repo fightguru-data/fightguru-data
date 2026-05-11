@@ -5,6 +5,9 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+import base64 as _b64
+import glob as _glob
+import os
 from datetime import datetime
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -218,7 +221,7 @@ def calc_age(raw):
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def load_data():
-    if not __import__('os').path.exists(DB_FILE): return None
+    if not os.path.exists(DB_FILE): return None
     try:
         df = pd.read_csv(DB_FILE, low_memory=False)
         df.columns = [c.strip().lower() for c in df.columns]
@@ -615,13 +618,12 @@ _streak_block = (
 # ─────────────────────────────────────────────────────────────────────────────
 # ЛОГОТИП — грузим logo.png из репо, кодируем в base64
 # ─────────────────────────────────────────────────────────────────────────────
-import base64 as _b64, glob as _glob
 _logo_b64 = ""
 _logo_paths = ["logo.png",
-               __import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)), "logo.png"),
-               __import__('os').path.join(__import__('os').getcwd(), "logo.png")]
+               os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png"),
+               os.path.join(os.getcwd(), "logo.png")]
 for _lp in _logo_paths:
-    if __import__('os').path.exists(_lp):
+    if os.path.exists(_lp):
         with open(_lp, "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
         break
 if not _logo_b64:
@@ -736,10 +738,107 @@ card_html = f"""<div class="card">
   </div>
 </div>"""
 
+# CSS карточки (отдельно — используется и в iframe и в скачивании)
+card_css = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;700;800&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+.card{width:1080px;height:1920px;background:#06070d;display:flex;flex-direction:row;overflow:hidden;}
+.photo-col{width:360px;min-width:360px;height:1920px;flex-shrink:0;background:#0a0b14;border-right:6px solid #c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;}
+.photo-icon{width:120px;height:120px;border-radius:50%;border:3px dashed #1a1d2e;display:flex;align-items:center;justify-content:center;opacity:.18;}
+.photo-icon svg{width:56px;height:56px;fill:#444;}
+.photo-lbl{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.26em;color:#1a1d2e;text-align:center;line-height:2;}
+.info-col{width:720px;height:1920px;display:flex;flex-direction:column;}
+.name-block{height:600px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:0 52px 44px 52px;border-bottom:4px solid #c0392b;}
+.name-topbar{display:flex;align-items:center;gap:18px;margin-bottom:28px;}
+.tb-logo{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.tb-logo-ph{width:56px;height:56px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:16px;color:#fff;letter-spacing:.04em;}
+.tb-brand{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:.2em;color:#c0392b;line-height:1;}
+.tb-sub{font-family:'Barlow',sans-serif;font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#1e2030;margin-top:4px;}
+.f-disc{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:.28em;color:#c0392b;margin-bottom:20px;line-height:1;}
+.f-first{font-family:'Barlow',sans-serif;font-size:38px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:#ffffff;line-height:1;margin-bottom:6px;}
+.f-last{font-family:'Bebas Neue',sans-serif;font-size:148px;color:#ffffff;line-height:.9;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:clip;margin-bottom:34px;}
+.f-last .red{color:#c0392b;}
+.f-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.f-flag{font-size:44px;line-height:1;flex-shrink:0;}
+.f-cname{font-family:'Barlow',sans-serif;font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#8890b8;}
+.f-age{font-family:'Bebas Neue',sans-serif;font-size:34px;color:#c0392b;letter-spacing:.08em;}
+.record{height:320px;flex-shrink:0;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid #0f1020;}
+.rec{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border-right:2px solid #0f1020;}
+.rec:last-child{border-right:none;}
+.rv{font-family:'Bebas Neue',sans-serif;font-size:108px;line-height:1;letter-spacing:.02em;}
+.rv.n{color:#ffffff;}.rv.g{color:#2ecc71;}.rv.r{color:#c0392b;}.rv.y{color:#f1c40f;}
+.rl{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.2em;color:#6870a0;}
+.pbar{height:100px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;padding:0 52px;gap:14px;border-bottom:2px solid #0f1020;}
+.pbar-row{display:flex;justify-content:space-between;align-items:baseline;}
+.pbar-wins{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.1em;color:#2ecc71;}
+.pbar-src{font-family:'Barlow',sans-serif;font-size:16px;font-weight:500;color:#3a3d54;letter-spacing:.1em;}
+.pbar-track{height:6px;background:#0f1020;border-radius:3px;overflow:hidden;}
+.streak{height:110px;flex-shrink:0;background:#040d07;border-bottom:2px solid #091509;display:flex;align-items:center;padding:0 52px;gap:18px;}
+.streak-empty{height:110px;flex-shrink:0;border-bottom:2px solid #0f1020;}
+.s-dots{display:flex;gap:8px;align-items:center;}
+.s-dot{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex-shrink:0;}
+.s-txt{font-family:'Bebas Neue',sans-serif;font-size:46px;letter-spacing:.12em;color:#2ecc71;line-height:1;}
+.extra{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;background:#0a0b14;flex:1;}
+.ec{background:#06070d;display:flex;flex-direction:column;justify-content:center;padding:0 52px;gap:8px;}
+.ev{font-family:'Bebas Neue',sans-serif;font-size:80px;line-height:1;letter-spacing:.02em;}
+.ev.r{color:#c0392b;}.ev.g{color:#2ecc71;}.ev.w{color:#ffffff;}.ev.y{color:#f1c40f;}
+.el{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.2em;color:#6870a0;}
+.footer{height:190px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;background:#08090f;}
+.footer-left{display:flex;align-items:center;gap:20px;}
+.logo-img{width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.logo-ph{width:72px;height:72px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:#fff;letter-spacing:.04em;}
+.brand{font-family:'Bebas Neue',sans-serif;font-size:44px;letter-spacing:.22em;color:#c0392b;line-height:1;}
+.brand-sub{font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#30334a;margin-top:4px;}
+.socials{display:flex;align-items:center;gap:20px;}
+.soc{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.soc-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.soc-icon.ig{background:#833ab4;}.soc-icon.vk{background:#0077ff;}
+.soc-icon.yt{background:#ff0000;}.soc-icon.tt{background:#010101;border:1px solid #2a2a2a;}
+.soc-icon svg{width:26px;height:26px;fill:#fff;}
+.soc-handle{font-family:'Barlow',sans-serif;font-size:17px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
+.soc-handle.ig{color:#c77dff;}.soc-handle.vk{color:#60a5ff;}
+.soc-handle.yt{color:#ff6b6b;}.soc-handle.tt{color:#ffffff;}
+.pbar-fill{height:100%;background:#2ecc71;border-radius:3px;}
+</style>
+"""
+
+# Полная HTML страница для скачивания и iframe
+full_html_page = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;700;800&display=swap" rel="stylesheet">
+<title>{final_name} — FightGuru</title>
+{card_css}
+<style>
+.pbar-fill{{width:{_winrate}%;}}
+html,body{{margin:0;padding:0;background:#06070d;width:100vw;}}
+#wrap{{width:1080px;transform-origin:top left;}}
+</style>
+</head>
+<body>
+<div id="wrap">{card_html}</div>
+<script>
+function resize(){{
+    var s=window.innerWidth/1080;
+    var el=document.getElementById('wrap');
+    el.style.transform='scale('+s+')';
+    el.style.height=(1920*s)+'px';
+    document.body.style.height=(1920*s)+'px';
+}}
+resize();
+document.fonts.ready.then(resize);
+window.addEventListener('resize',resize);
+</script>
+</body>
+</html>"""
+
 if st.button("📱 ОТКРЫТЬ КАРТОЧКУ", key="open_card"):
-    st.session_state.card_css  = card_css
+    st.session_state.card_css  = card_css + f"<style>.pbar-fill{{width:{_winrate}%;}}</style>"
     st.session_state.card_body = card_html
-    st.session_state.card_html = full_html_page  # для скачивания
+    st.session_state.card_html = full_html_page
     st.session_state.show_card = True
     st.rerun()
 
