@@ -250,88 +250,64 @@ for k, v in [('sq',''),('sel',None),('card_html',''),('show_card',False)]:
 # ЕСЛИ НУЖНО ПОКАЗАТЬ КАРТОЧКУ — показываем ТОЛЬКО её, весь UI скрыт
 # ─────────────────────────────────────────────────────────────────────────────
 if st.session_state.show_card and st.session_state.card_html:
-    # Полностью скрываем весь Streamlit UI
+    # Кодируем HTML карточки в base64 и открываем в новой вкладке через data URL
+    # Это единственный надёжный способ показать чистую страницу без Streamlit UI
+    import base64
+    html_bytes  = st.session_state.card_html.encode('utf-8')
+    html_b64    = base64.b64encode(html_bytes).decode('utf-8')
+    data_url    = f"data:text/html;base64,{html_b64}"
+
+    # JS открывает новую вкладку с чистой карточкой
+    open_js = f"""
+    <script>
+    (function() {{
+        var url = "{data_url}";
+        var win = window.open(url, '_blank');
+        if (!win) {{
+            // Если браузер заблокировал popup — показываем ссылку
+            document.getElementById('fallback').style.display = 'block';
+        }}
+    }})();
+    </script>
+    <div id="fallback" style="display:none;text-align:center;padding:20px;
+    font-family:Barlow,sans-serif;color:#8890b8">
+        <p style="margin-bottom:12px">Браузер заблокировал открытие.<br>Нажми кнопку ниже:</p>
+        <a href="{data_url}" target="_blank"
+           style="background:#c0392b;color:#fff;padding:14px 28px;border-radius:10px;
+           text-decoration:none;font-weight:800;font-size:16px;letter-spacing:.1em">
+           ОТКРЫТЬ КАРТОЧКУ
+        </a>
+    </div>
+    """
+    components.html(open_js, height=120)
+
     st.markdown("""
-    <style>
-    .main .block-container { padding: 0 !important; max-width: 100% !important; }
-    header, footer, #MainMenu, section[data-testid="stSidebar"],
-    div[data-testid="stToolbar"], div[data-testid="stDecoration"],
-    div[data-testid="stStatusWidget"] { display: none !important; }
-    .stApp { background: #06070d !important; }
-    </style>
+    <div style='text-align:center;padding:10px 0 6px'>
+      <div style='font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:.14em;
+      color:#2ecc71'>✓ КАРТОЧКА ОТКРЫЛАСЬ В НОВОЙ ВКЛАДКЕ</div>
+    </div>
     """, unsafe_allow_html=True)
 
-    # Показываем карточку на весь экран через iframe
-    # Карточка масштабируется под ширину экрана телефона
-    card_with_scale = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    html, body {{
-        background: #06070d;
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-    }}
-    .scale-wrap {{
-        /* Масштабируем карточку 1080px под реальный экран */
-        width: 1080px;
-        transform-origin: top center;
-        transform: scale(calc(100vw / 1080));
-    }}
-    </style>
-    </head>
-    <body>
-    <div class="scale-wrap">
-    {st.session_state.card_html}
+    # Инструкция по скриншоту
+    st.markdown("""
+    <div style='background:#0a0b14;border:1px solid #1e2135;border-radius:12px;
+    padding:16px 20px;max-width:480px;margin:0 auto'>
+    <div style='font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:.12em;
+    color:#c0392b;margin-bottom:10px'>КАК СОХРАНИТЬ</div>
+    <div style='font-size:14px;color:#52566e;line-height:2;font-family:Barlow,sans-serif'>
+    📱 <b style='color:#8890b8'>iPhone:</b> Боковая кнопка + громкость ↑<br>
+    📱 <b style='color:#8890b8'>Android:</b> Питание + громкость ↓<br>
+    💻 <b style='color:#8890b8'>Десктоп:</b> Скачай HTML кнопкой ниже
     </div>
-    <script>
-    // Точный расчёт масштаба под экран
-    function resize() {{
-        var wrap = document.querySelector('.scale-wrap');
-        var scale = window.innerWidth / 1080;
-        wrap.style.transform = 'scale(' + scale + ')';
-        // Высота после масштабирования
-        wrap.style.marginTop = ((1920 * scale - 1920) / 2) + 'px';
-        document.body.style.height = (1920 * scale) + 'px';
-    }}
-    resize();
-    window.addEventListener('resize', resize);
-    </script>
-    </body>
-    </html>
-    """
+    </div>
+    """, unsafe_allow_html=True)
 
-    components.html(card_with_scale, height=800, scrolling=False)
-
-    # Кнопка назад — единственный элемент под карточкой
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         if st.button("← Назад к поиску"):
             st.session_state.show_card = False
             st.rerun()
-
-    # Инструкция
-    st.markdown("""
-    <div style='background:#0a0b14;border:1px solid #1e2135;border-radius:12px;
-    padding:14px 18px;margin-top:10px;max-width:600px;margin-left:auto;margin-right:auto'>
-    <div style='font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:.12em;
-    color:#c0392b;margin-bottom:8px'>КАК СОХРАНИТЬ КАРТОЧКУ</div>
-    <div style='font-size:13px;color:#52566e;line-height:1.9;font-family:Barlow,sans-serif'>
-    📱 <b style='color:#8890b8'>iPhone:</b> Боковая кнопка + кнопка громкости<br>
-    📱 <b style='color:#8890b8'>Android:</b> Кнопка питания + кнопка громкости вниз<br>
-    💻 <b style='color:#8890b8'>Десктоп:</b> Скачай HTML и открой в Chrome для высокого качества
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
 
     st.stop()
 
@@ -737,23 +713,53 @@ card_css = f"""
 </style>
 """
 
-full_card_html = card_css + card_html
-
-if st.button("📱 ОТКРЫТЬ КАРТОЧКУ", key="open_card"):
-    st.session_state.card_html = full_card_html
-    st.session_state.show_card = True
-    st.rerun()
-
-# Кнопка скачать HTML (для десктопа/Фотошопа)
+# Полная HTML страница — используется и для открытия в новой вкладке и для скачивания
 full_html_page = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=1080">
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;700;800&display=swap" rel="stylesheet">
 <title>{final_name} - FightGuru</title>
-{card_css.replace('{{','{{').replace('}}','}}').replace(f"width:{_winrate}%", f"width:{_winrate}%")}
-</head><body style="margin:0;padding:0;background:#06070d">
+{card_css}
+<style>
+html, body {{
+    margin: 0; padding: 0;
+    background: #06070d;
+    width: 100vw;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}}
+.scale-wrap {{
+    width: 1080px;
+    transform-origin: top left;
+}}
+</style>
+</head>
+<body>
+<div class="scale-wrap">
 {card_html}
-</body></html>"""
+</div>
+<script>
+function resize() {{
+    var wrap = document.querySelector('.scale-wrap');
+    var scale = window.innerWidth / 1080;
+    wrap.style.transform = 'scale(' + scale + ')';
+    wrap.style.height = (1920 * scale) + 'px';
+    document.body.style.height = (1920 * scale) + 'px';
+}}
+resize();
+window.addEventListener('resize', resize);
+</script>
+</body>
+</html>"""
+
+if st.button("📱 ОТКРЫТЬ КАРТОЧКУ", key="open_card"):
+    st.session_state.card_html = full_html_page
+    st.session_state.show_card = True
+    st.rerun()
 
 st.download_button(
     label="💻 Скачать HTML (для Фотошопа)",
