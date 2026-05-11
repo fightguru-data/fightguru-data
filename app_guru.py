@@ -1301,10 +1301,11 @@ with tab_s:
     disc_cat_raw = ""
     disc_cat     = ""
     if not disc_matches.empty:
-        cc2 = disc_matches['category_code'].value_counts()
-        if not cc2.empty:
-            disc_cat_raw = str(cc2.index[0]).upper()
-            disc_cat     = get_cat(cc2.index[0])
+        # Берём категорию из ПОСЛЕДНЕГО боя (disc_matches отсортированы date DESC)
+        # Это гарантирует актуальный вес, а не самый частый за всю карьеру
+        _last_cat_row = disc_matches.iloc[0]['category_code']
+        disc_cat_raw  = str(_last_cat_row).upper()
+        disc_cat      = get_cat(_last_cat_row)
 
     # ── Доп статистика ───────────────────────────────────────────────────────
     fastest = "—"
@@ -1370,7 +1371,8 @@ with tab_s:
     flag_emoji   = fl(acountry)
     country_name = cn(acountry)
 
-    _is_combat   = 'CSM' in main_cat_raw
+    # Используем disc_cat_raw (дисциплина выбранной вкладки), не main_cat_raw
+    _is_combat   = 'CSM' in disc_cat_raw
     _fight_word  = "Боёв" if _is_combat else "Схваток"
 
     # ── Логотип ───────────────────────────────────────────────────────────────
