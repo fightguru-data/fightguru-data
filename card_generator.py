@@ -362,18 +362,19 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Поиск
-def _on_change():
-    st.session_state.sq    = st.session_state.get("_sq","").strip()
-    st.session_state.sel   = None
+# Поиск — читаем напрямую из виджета, не через on_change
+# on_change + st.session_state паттерн вызывает проблемы с rerun в Streamlit
+sq_input = st.text_input("", placeholder="🔍  Введи свою фамилию",
+                          label_visibility="collapsed", key="_sq_input")
+
+# Сбрасываем выбор если фамилия изменилась
+if sq_input.strip() != st.session_state.get('sq',''):
+    st.session_state.sq        = sq_input.strip()
+    st.session_state.sel       = None
     st.session_state.show_card = False
     st.session_state.card_html = ""
 
-st.text_input("", value=st.session_state.sq, key="_sq",
-              placeholder="🔍  Введи свою фамилию",
-              label_visibility="collapsed", on_change=_on_change)
-
-sq = st.session_state.sq.strip()
+sq = sq_input.strip()
 
 if not sq:
     st.markdown("""
@@ -619,17 +620,22 @@ _streak_block = (
 # ЛОГОТИП — грузим logo.png из репо, кодируем в base64
 # ─────────────────────────────────────────────────────────────────────────────
 _logo_b64 = ""
-_logo_paths = ["logo.png",
-               os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png"),
-               os.path.join(os.getcwd(), "logo.png")]
-for _lp in _logo_paths:
-    if os.path.exists(_lp):
-        with open(_lp, "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
-        break
-if not _logo_b64:
-    _found = _glob.glob("**/logo.png", recursive=True)
-    if _found:
-        with open(_found[0], "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
+try:
+    _logo_paths = ["logo.png", os.path.join(os.getcwd(), "logo.png")]
+    try:
+        _logo_paths.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png"))
+    except NameError:
+        pass  # __file__ недоступен в Streamlit Cloud — пропускаем
+    for _lp in _logo_paths:
+        if os.path.exists(_lp):
+            with open(_lp, "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
+            break
+    if not _logo_b64:
+        _found = _glob.glob("**/logo.png", recursive=True)
+        if _found:
+            with open(_found[0], "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
+except Exception:
+    pass
 
 _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
 _logo_tag = (f'<img src="{_logo_src}" class="logo-img">' if _logo_src
@@ -784,19 +790,19 @@ card_css = """
 .ev{font-family:'Bebas Neue',sans-serif;font-size:80px;line-height:1;letter-spacing:.02em;}
 .ev.r{color:#c0392b;}.ev.g{color:#2ecc71;}.ev.w{color:#ffffff;}.ev.y{color:#f1c40f;}
 .el{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.2em;color:#6870a0;}
-.footer{height:190px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;background:#08090f;}
-.footer-left{display:flex;align-items:center;gap:20px;}
+.footer{height:190px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 36px;border-top:3px solid #0f1020;background:#08090f;}
+.footer-left{display:flex;align-items:center;gap:14px;}
 .logo-img{width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;}
 .logo-ph{width:72px;height:72px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:#fff;letter-spacing:.04em;}
 .brand{font-family:'Bebas Neue',sans-serif;font-size:44px;letter-spacing:.22em;color:#c0392b;line-height:1;}
 .brand-sub{font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#30334a;margin-top:4px;}
-.socials{display:flex;align-items:center;gap:20px;}
-.soc{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.socials{display:flex;align-items:center;gap:12px;}
+.soc{display:flex;flex-direction:column;align-items:center;gap:7px;}
 .soc-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .soc-icon.ig{background:#833ab4;}.soc-icon.vk{background:#0077ff;}
 .soc-icon.yt{background:#ff0000;}.soc-icon.tt{background:#010101;border:1px solid #2a2a2a;}
 .soc-icon svg{width:26px;height:26px;fill:#fff;}
-.soc-handle{font-family:'Barlow',sans-serif;font-size:17px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
+.soc-handle{font-family:'Barlow',sans-serif;font-size:15px;font-weight:800;letter-spacing:.01em;white-space:nowrap;}
 .soc-handle.ig{color:#c77dff;}.soc-handle.vk{color:#60a5ff;}
 .soc-handle.yt{color:#ff6b6b;}.soc-handle.tt{color:#ffffff;}
 .pbar-fill{height:100%;background:#2ecc71;border-radius:3px;}
