@@ -613,6 +613,27 @@ _streak_block = (
 ) if _streak_n >= 2 else '<div class="streak-empty"></div>'
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ЛОГОТИП — грузим logo.png из репо, кодируем в base64
+# ─────────────────────────────────────────────────────────────────────────────
+import base64 as _b64, glob as _glob
+_logo_b64 = ""
+_logo_paths = ["logo.png",
+               __import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)), "logo.png"),
+               __import__('os').path.join(__import__('os').getcwd(), "logo.png")]
+for _lp in _logo_paths:
+    if __import__('os').path.exists(_lp):
+        with open(_lp, "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
+        break
+if not _logo_b64:
+    _found = _glob.glob("**/logo.png", recursive=True)
+    if _found:
+        with open(_found[0], "rb") as _lf: _logo_b64 = _b64.b64encode(_lf.read()).decode()
+
+_logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
+_logo_tag = (f'<img src="{_logo_src}" class="logo-img">' if _logo_src
+             else '<div class="logo-ph">FG</div>')
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ПРЕВЬЮ МИНИ-КАРТОЧКИ В UI (чтобы атлет видел что получится)
 # ─────────────────────────────────────────────────────────────────────────────
 if len(athletes) > 1:
@@ -681,13 +702,13 @@ card_html = f"""<div class="card">
     </div>
     <div class="footer">
       <div class="footer-left">
-        <div class="logo-ph">FG</div>
+        {_logo_tag}
         <div>
           <div class="brand">FIGHTGURU</div>
-          <div class="brand-sub">fightguru.ru</div>
+          <div class="brand-sub">@guru.fight</div>
         </div>
       </div>
-      <div class="fias">Официальная<br>статистика FIAS</div>
+      <div class="fias">@guru.fight<br>vk.com/fightguru</div>
     </div>
   </div>
 </div>"""
@@ -698,8 +719,7 @@ card_css = f"""
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;700;800&display=swap');
 *{{box-sizing:border-box;margin:0;padding:0}}
 .card{{width:1080px;height:1920px;background:#06070d;display:flex;flex-direction:row;overflow:hidden;}}
-.photo-col{{width:360px;min-width:360px;height:1920px;flex-shrink:0;background:#0a0b14;border-right:6px solid #c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;position:relative;}}
-.photo-col::before{{content:'';position:absolute;left:0;top:0;width:10px;height:100%;background:#c0392b;}}
+.photo-col{{width:360px;min-width:360px;height:1920px;flex-shrink:0;background:#0a0b14;border-right:6px solid #c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;}}
 .photo-icon{{width:120px;height:120px;border-radius:50%;border:3px dashed #1a1d2e;display:flex;align-items:center;justify-content:center;opacity:.18;}}
 .photo-icon svg{{width:56px;height:56px;fill:#444;}}
 .photo-lbl{{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.26em;color:#1a1d2e;text-align:center;line-height:2;}}
@@ -737,6 +757,7 @@ card_css = f"""
 .el{{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.22em;color:#6870a0;}}
 .footer{{height:230px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;}}
 .footer-left{{display:flex;align-items:center;gap:24px;}}
+.logo-img{{width:96px;height:96px;border-radius:50%;object-fit:cover;flex-shrink:0;}}
 .logo-ph{{width:96px;height:96px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:30px;color:#fff;letter-spacing:.06em;}}
 .brand{{font-family:'Bebas Neue',sans-serif;font-size:54px;letter-spacing:.24em;color:#c0392b;line-height:1;}}
 .brand-sub{{font-family:'Barlow',sans-serif;font-size:22px;font-weight:700;letter-spacing:.1em;color:#52566e;margin-top:5px;}}
