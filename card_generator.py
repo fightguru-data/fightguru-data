@@ -242,7 +242,7 @@ df = load_data()
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
-for k, v in [('sq',''),('sel',None),('card_html',''),('show_card',False)]:
+for k, v in [('sq',''),('sel',None),('card_html',''),('card_css',''),('card_body',''),('show_card',False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -250,64 +250,95 @@ for k, v in [('sq',''),('sel',None),('card_html',''),('show_card',False)]:
 # ЕСЛИ НУЖНО ПОКАЗАТЬ КАРТОЧКУ — показываем ТОЛЬКО её, весь UI скрыт
 # ─────────────────────────────────────────────────────────────────────────────
 if st.session_state.show_card and st.session_state.card_html:
-    # Кодируем HTML карточки в base64 и открываем в новой вкладке через data URL
-    # Это единственный надёжный способ показать чистую страницу без Streamlit UI
-    import base64
-    html_bytes  = st.session_state.card_html.encode('utf-8')
-    html_b64    = base64.b64encode(html_bytes).decode('utf-8')
-    data_url    = f"data:text/html;base64,{html_b64}"
-
-    # JS открывает новую вкладку с чистой карточкой
-    open_js = f"""
-    <script>
-    (function() {{
-        var url = "{data_url}";
-        var win = window.open(url, '_blank');
-        if (!win) {{
-            // Если браузер заблокировал popup — показываем ссылку
-            document.getElementById('fallback').style.display = 'block';
-        }}
-    }})();
-    </script>
-    <div id="fallback" style="display:none;text-align:center;padding:20px;
-    font-family:Barlow,sans-serif;color:#8890b8">
-        <p style="margin-bottom:12px">Браузер заблокировал открытие.<br>Нажми кнопку ниже:</p>
-        <a href="{data_url}" target="_blank"
-           style="background:#c0392b;color:#fff;padding:14px 28px;border-radius:10px;
-           text-decoration:none;font-weight:800;font-size:16px;letter-spacing:.1em">
-           ОТКРЫТЬ КАРТОЧКУ
-        </a>
-    </div>
-    """
-    components.html(open_js, height=120)
-
+    # Скрываем Streamlit UI — показываем только карточку
     st.markdown("""
-    <div style='text-align:center;padding:10px 0 6px'>
-      <div style='font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:.14em;
-      color:#2ecc71'>✓ КАРТОЧКА ОТКРЫЛАСЬ В НОВОЙ ВКЛАДКЕ</div>
-    </div>
+    <style>
+    header[data-testid="stHeader"],
+    div[data-testid="stToolbar"],
+    div[data-testid="stDecoration"],
+    footer { display: none !important; }
+    .main .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    .stApp { background: #06070d !important; }
+    </style>
     """, unsafe_allow_html=True)
 
-    # Инструкция по скриншоту
+    # Вычисляем ширину экрана через JS и показываем карточку
+    # масштабированную точно под экран — без обрезки по бокам
+    card_embed = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    html, body {{
+        background: #06070d;
+        overflow: hidden;
+        width: 100%;
+    }}
+    #wrap {{
+        width: 1080px;
+        transform-origin: top left;
+        position: absolute;
+        top: 0; left: 0;
+    }}
+    {st.session_state.card_css}
+    </style>
+    </head>
+    <body>
+    <div id="wrap">
+    {st.session_state.card_body}
+    </div>
+    <script>
+    function scale() {{
+        var w = window.innerWidth || document.documentElement.clientWidth;
+        var s = w / 1080;
+        var cardH = Math.round(1920 * s);
+        var el = document.getElementById('wrap');
+        el.style.transform = 'scale(' + s + ')';
+        // Сообщаем Streamlit реальную высоту карточки
+        window.parent.postMessage({{
+            type: 'streamlit:setFrameHeight',
+            height: cardH
+        }}, '*');
+        document.documentElement.style.height = cardH + 'px';
+        document.body.style.height = cardH + 'px';
+    }}
+    // Запускаем сразу и после загрузки шрифтов
+    scale();
+    document.fonts.ready.then(scale);
+    window.addEventListener('resize', scale);
+    </script>
+    </body>
+    </html>
+    """
+
+    components.html(card_embed, height=700, scrolling=False)
+
+    st.markdown("<div style='height:8px;background:#06070d'></div>",
+                unsafe_allow_html=True)
+
+    # Кнопка назад
+    if st.button("← Другой атлет"):
+        st.session_state.show_card = False
+        st.rerun()
+
     st.markdown("""
     <div style='background:#0a0b14;border:1px solid #1e2135;border-radius:12px;
-    padding:16px 20px;max-width:480px;margin:0 auto'>
-    <div style='font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:.12em;
-    color:#c0392b;margin-bottom:10px'>КАК СОХРАНИТЬ</div>
-    <div style='font-size:14px;color:#52566e;line-height:2;font-family:Barlow,sans-serif'>
-    📱 <b style='color:#8890b8'>iPhone:</b> Боковая кнопка + громкость ↑<br>
+    padding:14px 18px;margin-top:8px'>
+    <div style='font-family:Bebas Neue,sans-serif;font-size:16px;letter-spacing:.12em;
+    color:#c0392b;margin-bottom:8px'>КАК СОХРАНИТЬ КАРТОЧКУ</div>
+    <div style='font-size:13px;color:#52566e;line-height:2;font-family:Barlow,sans-serif'>
+    📱 <b style='color:#8890b8'>iPhone:</b> Боковая + громкость ↑ — скриншот всего экрана<br>
     📱 <b style='color:#8890b8'>Android:</b> Питание + громкость ↓<br>
-    💻 <b style='color:#8890b8'>Десктоп:</b> Скачай HTML кнопкой ниже
+    💻 <b style='color:#8890b8'>Компьютер:</b> Скачай HTML кнопкой ниже → Chrome → PDF
     </div>
     </div>
     """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        if st.button("← Назад к поиску"):
-            st.session_state.show_card = False
-            st.rerun()
 
     st.stop()
 
@@ -757,7 +788,9 @@ window.addEventListener('resize', resize);
 </html>"""
 
 if st.button("📱 ОТКРЫТЬ КАРТОЧКУ", key="open_card"):
-    st.session_state.card_html = full_html_page
+    st.session_state.card_css  = card_css
+    st.session_state.card_body = card_html
+    st.session_state.card_html = full_html_page  # для скачивания
     st.session_state.show_card = True
     st.rerun()
 
