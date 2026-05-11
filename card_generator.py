@@ -632,6 +632,8 @@ if not _logo_b64:
 _logo_src = f"data:image/png;base64,{_logo_b64}" if _logo_b64 else ""
 _logo_tag = (f'<img src="{_logo_src}" class="logo-img">' if _logo_src
              else '<div class="logo-ph">FG</div>')
+_logo_tag_topbar = (f'<img src="{_logo_src}" class="topbar-logo">' if _logo_src
+                    else '<div class="topbar-logo-ph">FG</div>')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ПРЕВЬЮ МИНИ-КАРТОЧКИ В UI (чтобы атлет видел что получится)
@@ -670,6 +672,16 @@ card_html = f"""<div class="card">
     <div class="photo-lbl">Место<br>для<br>фото</div>
   </div>
   <div class="info-col">
+    <div class="topbar">
+      <div class="topbar-left">
+        {_logo_tag_topbar}
+        <div>
+          <div class="topbar-brand">FIGHTGURU</div>
+          <div class="topbar-sub">Sambo Stats Portal</div>
+        </div>
+      </div>
+      <div class="topbar-right">Официальная<br>статистика FIAS</div>
+    </div>
     <div class="name-block">
       <div class="f-disc">{_main_cat}</div>
       <div class="f-first">{first_n}</div>
@@ -708,7 +720,32 @@ card_html = f"""<div class="card">
           <div class="brand-sub">@guru.fight</div>
         </div>
       </div>
-      <div class="fias">@guru.fight<br>vk.com/fightguru</div>
+      <div class="socials">
+        <div class="soc">
+          <div class="soc-icon ig">
+            <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </div>
+          <div class="soc-handle ig">@guru.fight</div>
+        </div>
+        <div class="soc">
+          <div class="soc-icon vk">
+            <svg viewBox="0 0 24 24"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.408 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.118-5.335-3.202C4.624 10.857 4.03 8.57 4.03 8.096c0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.677.863 2.49 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.204.17-.407.44-.407h2.743c.372 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.27-1.422 2.168-3.608 2.168-3.608.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.491-.085.745-.576.745z"/></svg>
+          </div>
+          <div class="soc-handle vk">fightguru</div>
+        </div>
+        <div class="soc">
+          <div class="soc-icon yt">
+            <svg viewBox="0 0 24 24"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
+          </div>
+          <div class="soc-handle yt">fightguru</div>
+        </div>
+        <div class="soc">
+          <div class="soc-icon tt">
+            <svg viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.28 6.28 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.75a4.85 4.85 0 01-1.01-.06z"/></svg>
+          </div>
+          <div class="soc-handle tt">fight.guru</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>"""
@@ -724,7 +761,7 @@ card_css = f"""
 .photo-icon svg{{width:56px;height:56px;fill:#444;}}
 .photo-lbl{{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.26em;color:#1a1d2e;text-align:center;line-height:2;}}
 .info-col{{width:720px;height:1920px;display:flex;flex-direction:column;}}
-.name-block{{height:652px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:0 52px 44px 52px;border-bottom:4px solid #c0392b;}}
+.name-block{{height:564px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:0 52px 44px 52px;border-bottom:4px solid #c0392b;}}
 .f-disc{{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:.28em;color:#c0392b;margin-bottom:20px;line-height:1;}}
 .f-first{{font-family:'Barlow',sans-serif;font-size:38px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:#ffffff;line-height:1;margin-bottom:6px;}}
 .f-last{{font-family:'Bebas Neue',sans-serif;font-size:148px;color:#ffffff;line-height:.9;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:clip;margin-bottom:34px;}}
@@ -755,13 +792,32 @@ card_css = f"""
 .ev{{font-family:'Bebas Neue',sans-serif;font-size:92px;line-height:1;letter-spacing:.02em;}}
 .ev.r{{color:#c0392b;}}.ev.g{{color:#2ecc71;}}.ev.w{{color:#ffffff;}}.ev.y{{color:#f1c40f;}}
 .el{{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.22em;color:#6870a0;}}
-.footer{{height:230px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;}}
-.footer-left{{display:flex;align-items:center;gap:24px;}}
-.logo-img{{width:96px;height:96px;border-radius:50%;object-fit:cover;flex-shrink:0;}}
-.logo-ph{{width:96px;height:96px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:30px;color:#fff;letter-spacing:.06em;}}
-.brand{{font-family:'Bebas Neue',sans-serif;font-size:54px;letter-spacing:.24em;color:#c0392b;line-height:1;}}
-.brand-sub{{font-family:'Barlow',sans-serif;font-size:22px;font-weight:700;letter-spacing:.1em;color:#52566e;margin-top:5px;}}
-.fias{{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.16em;color:#3a3d54;text-align:right;line-height:2.2;}}
+.topbar{{height:88px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-bottom:2px solid #0f1020;background:#08090f;}}
+.topbar-left{{display:flex;align-items:center;gap:18px;}}
+.topbar-logo{{width:60px;height:60px;border-radius:50%;object-fit:cover;flex-shrink:0;}}
+.topbar-logo-ph{{width:60px;height:60px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:18px;color:#fff;letter-spacing:.04em;}}
+.topbar-brand{{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:.2em;color:#c0392b;line-height:1;}}
+.topbar-sub{{font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#1e2030;margin-top:4px;}}
+.topbar-right{{font-family:'Barlow',sans-serif;font-size:18px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#1e2030;text-align:right;line-height:2;}}
+.footer{{height:192px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;background:#08090f;}}
+.footer-left{{display:flex;align-items:center;gap:20px;}}
+.logo-img{{width:80px;height:80px;border-radius:50%;object-fit:cover;flex-shrink:0;}}
+.logo-ph{{width:80px;height:80px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:.04em;}}
+.brand{{font-family:'Bebas Neue',sans-serif;font-size:44px;letter-spacing:.22em;color:#c0392b;line-height:1;}}
+.brand-sub{{font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#30334a;margin-top:4px;}}
+.socials{{display:flex;align-items:center;gap:22px;}}
+.soc{{display:flex;flex-direction:column;align-items:center;gap:8px;}}
+.soc-icon{{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}}
+.soc-icon.ig{{background:#833ab4;}}
+.soc-icon.vk{{background:#0077ff;}}
+.soc-icon.yt{{background:#ff0000;}}
+.soc-icon.tt{{background:#010101;border:1px solid #2a2a2a;}}
+.soc-icon svg{{width:28px;height:28px;fill:#fff;}}
+.soc-handle{{font-family:'Barlow',sans-serif;font-size:18px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}}
+.soc-handle.ig{{color:#c77dff;}}
+.soc-handle.vk{{color:#60a5ff;}}
+.soc-handle.yt{{color:#ff6b6b;}}
+.soc-handle.tt{{color:#ffffff;}}
 </style>
 """
 
