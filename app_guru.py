@@ -1407,354 +1407,129 @@ with tab_s:
     _last_n_main = last_n[:-2] if len(last_n) >= 2 else last_n
     _last_n_end  = last_n[-2:] if len(last_n) >= 2 else ""
 
-    # ── Streak block ─────────────────────────────────────────────────────────
-    _streak_dots = "".join(
-        '<div style="width:14px;height:14px;border-radius:50%;background:#2ecc71;flex-shrink:0"></div>'
-        for _ in range(min(_streak_n, 8))
-    )
+    # ── Streak block
     _streak_block = (
         f'<div class="streak">'
         f'<div class="s-dots">'
         + "".join(f'<div class="s-dot"></div>' for _ in range(min(_streak_n, 8)))
         + f'</div>'
-        f'<span class="s-txt">{_streak_n} WIN STREAK &#128293;</span>'
+        f'<div class="s-txt">{_streak_n} WIN STREAK &#128293;</div>'
         f'</div>'
-    ) if _streak_n >= 2 else ""
+    ) if _streak_n >= 2 else '<div class="streak-empty"></div>'
 
-    # ── HTML карточка 536×866 (пропорции скриншота) ──────────────────────────
+    # ── HTML карточка 1080x1920 (левая треть фото, правые две трети инфо)
     html_page = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=536">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-<title>{final_name} — FightGuru</title>
+<meta name="viewport" content="width=1080">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;700;800&display=swap" rel="stylesheet">
+<title>{final_name} - FightGuru</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-html,body{{background:#060608;margin:0;padding:0;width:536px}}
-
-/* ═══════════════════════════════════════════════════════
-   КАРТОЧКА  536 × 866 px
-   Типографика: Bebas Neue (display/цифры) + Inter (UI)
-   Иерархия: фамилия → категория → страна/возраст →
-             рекорд → win-bar → streak → статы → бренд
-═══════════════════════════════════════════════════════ */
-.card{{
-  width:536px;
-  height:866px;
-  background:#060608;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-  font-family:'Inter',sans-serif;
-}}
-
-/* ─── HERO  268 px ─────────────────────────────────── */
-.hero{{
-  display:flex;
-  height:268px;
-  flex-shrink:0;
-  background:#0d0d18;
-  border-bottom:4px solid #c0392b;
-}}
-
-/* Колонка фото — 42% ширины */
-.photo-col{{
-  width:225px;min-width:225px;
-  flex-shrink:0;
-  background:#0b0b16;
-  border-right:3px solid #c0392b;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:10px;
-  position:relative;
-}}
-.photo-icon{{
-  width:72px;height:72px;border-radius:50%;
-  border:2px dashed #222436;
-  display:flex;align-items:center;justify-content:center;
-  opacity:.25;
-}}
-.photo-icon svg{{width:32px;height:32px;fill:#555;}}
-.photo-lbl{{
-  font-size:9px;font-weight:700;letter-spacing:.18em;
-  text-transform:uppercase;color:#222436;
-  text-align:center;line-height:1.7;
-}}
-
-/* Колонка имени — flex:1 */
-.name-col{{
-  flex:1;
-  display:flex;flex-direction:column;
-  justify-content:flex-end;
-  padding:0 22px 18px 20px;
-  min-width:0;overflow:hidden;
-}}
-
-/* Имя — мелко, Inter, широкий трекинг */
-.f-first{{
-  font-size:11px;
-  font-weight:700;
-  color:#52566e;
-  text-transform:uppercase;
-  letter-spacing:.3em;
-  margin-bottom:2px;
-  line-height:1;
-}}
-
-/* Фамилия — Bebas Neue, крупно, последние 2 буквы красные */
-.f-last{{
-  font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:59px;
-  color:#ffffff;
-  line-height:.9;
-  letter-spacing:.01em;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:clip;
-  margin-bottom:11px;
-}}
+html,body{{background:#06070d;margin:0;padding:0;width:1080px}}
+.card{{width:1080px;height:1920px;background:#06070d;display:flex;flex-direction:row;overflow:hidden;}}
+.photo-col{{width:360px;min-width:360px;height:1920px;flex-shrink:0;background:#0a0b14;border-right:6px solid #c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;position:relative;}}
+.photo-col::before{{content:\'\';position:absolute;left:0;top:0;width:10px;height:100%;background:#c0392b;}}
+.photo-icon{{width:120px;height:120px;border-radius:50%;border:3px dashed #1a1d2e;display:flex;align-items:center;justify-content:center;opacity:.18;}}
+.photo-icon svg{{width:56px;height:56px;fill:#444;}}
+.photo-lbl{{font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#1a1d2e;text-align:center;line-height:1.9;}}
+.info-col{{width:720px;height:1920px;display:flex;flex-direction:column;}}
+.name-block{{height:652px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:0 52px 44px 52px;border-bottom:4px solid #c0392b;}}
+.f-disc{{font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.24em;color:#c0392b;margin-bottom:20px;line-height:1;}}
+.f-first{{font-family:\'Barlow\',sans-serif;font-size:38px;font-weight:800;text-transform:uppercase;letter-spacing:.2em;color:#ffffff;line-height:1;margin-bottom:8px;}}
+.f-last{{font-family:\'Barlow Condensed\',sans-serif;font-size:148px;font-weight:900;text-transform:uppercase;color:#ffffff;line-height:.88;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:clip;margin-bottom:34px;}}
 .f-last .red{{color:#c0392b;}}
-
-/* Категория — главная строка, жирная, белая, хорошо читается */
-.f-cat{{
-  font-size:14px;
-  font-weight:800;
-  color:#ffffff;
-  letter-spacing:.02em;
-  line-height:1.2;
-  margin-bottom:9px;
-}}
-
-/* Страна + возраст — одна строка */
-.f-meta{{
-  display:flex;
-  align-items:center;
-  gap:8px;
-}}
-.f-flag{{font-size:19px;line-height:1;flex-shrink:0;}}
-.f-cname{{
-  font-size:12px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.12em;
-  color:#7880a0;
-}}
-/* Возраст — красный акцент, но не кричащий */
-.f-age{{
-  font-size:12px;font-weight:700;
-  color:#c0392b;
-  letter-spacing:.04em;
-  margin-left:2px;
-}}
-
-/* ─── РЕКОРД  148 px ───────────────────────────────── */
-.record{{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  height:148px;
-  flex-shrink:0;
-  border-bottom:1px solid #111318;
-}}
-.rec{{
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:5px;
-  border-right:1px solid #111318;
-}}
+.f-meta{{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}}
+.f-flag{{font-size:44px;line-height:1;flex-shrink:0;}}
+.f-cname{{font-family:\'Barlow\',sans-serif;font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#8890b8;}}
+.f-age{{font-family:\'Barlow Condensed\',sans-serif;font-size:32px;font-weight:700;color:#c0392b;letter-spacing:.06em;}}
+.record{{height:364px;flex-shrink:0;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid #0f1020;}}
+.rec{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border-right:2px solid #0f1020;}}
 .rec:last-child{{border-right:none;}}
-.rv{{
-  font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:52px;line-height:1;
-}}
-.rv.n{{color:#ffffff;}}
-.rv.g{{color:#27ae60;}}
-.rv.r{{color:#c0392b;}}
-.rv.y{{color:#e6b800;}}
-.rl{{
-  font-size:9px;font-weight:800;
-  text-transform:uppercase;letter-spacing:.14em;
-  color:#52566e;
-}}
-
-/* ─── WIN BAR  62 px ───────────────────────────────── */
-.pbar{{
-  height:62px;
-  flex-shrink:0;
-  display:flex;flex-direction:column;
-  justify-content:center;
-  padding:0 20px;
-  border-bottom:1px solid #111318;
-  gap:8px;
-}}
-.pbar-row{{
-  display:flex;justify-content:space-between;
-  align-items:baseline;
-}}
-.pbar-wins{{font-size:12px;font-weight:700;color:#27ae60;}}
-.pbar-src{{font-size:10px;font-weight:500;color:#30334a;letter-spacing:.08em;}}
-.pbar-track{{height:3px;background:#161720;border-radius:2px;overflow:hidden;}}
-.pbar-fill{{height:100%;background:#27ae60;border-radius:2px;width:{_winrate}%;}}
-
-/* ─── STREAK  56 px (только если есть) ────────────── */
-.streak{{
-  height:56px;
-  flex-shrink:0;
-  background:#04110a;
-  border-bottom:1px solid #0a2018;
-  display:flex;align-items:center;
-  padding:0 20px;
-  gap:10px;
-}}
-.s-dots{{display:flex;gap:5px;}}
-.s-dot{{
-  width:8px;height:8px;border-radius:50%;
-  background:#27ae60;flex-shrink:0;
-}}
-.s-txt{{
-  font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:22px;letter-spacing:.1em;color:#27ae60;
-}}
-
-/* ─── 4 ЯЧЕЙКИ СТАТЫ  flex:1 ──────────────────────── */
-.extra{{
-  display:grid;grid-template-columns:1fr 1fr;
-  grid-template-rows:1fr 1fr;
-  gap:1px;background:#111318;
-  flex:1;
-}}
-.ec{{
-  background:#060608;
-  display:flex;flex-direction:column;
-  justify-content:center;
-  padding:0 20px;
-  gap:4px;
-}}
-.ev{{
-  font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:42px;line-height:1;
-}}
-.ev.r{{color:#c0392b;}}
-.ev.g{{color:#27ae60;}}
-.ev.w{{color:#ffffff;}}
-.ev.y{{color:#e6b800;}}
-.el{{
-  font-size:9px;font-weight:800;
-  text-transform:uppercase;letter-spacing:.14em;
-  color:#30334a;
-}}
-
-/* ─── ФУТЕР  76 px ─────────────────────────────────── */
-.footer{{
-  height:76px;
-  flex-shrink:0;
-  display:flex;align-items:center;
-  justify-content:space-between;
-  padding:0 20px;
-  border-top:1px solid #111318;
-  background:#060608;
-}}
-.footer-left{{display:flex;align-items:center;gap:12px;}}
-
-/* Логотип-круг — 46px, визуально крупнее текста бренда */
-.logo-img{{
-  width:46px;height:46px;border-radius:50%;
-  object-fit:cover;flex-shrink:0;
-}}
-.logo-ph{{
-  width:46px;height:46px;border-radius:50%;
-  background:#c0392b;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  font-size:13px;font-weight:900;color:#fff;
-  letter-spacing:.02em;
-}}
-/* Бренд: FIGHTGURU — 26px Bebas, под логотипом визуально тихий */
-.brand{{
-  font-family:'Bebas Neue',Impact,sans-serif;
-  font-size:26px;letter-spacing:.18em;color:#c0392b;
-  line-height:1;
-}}
-.brand-sub{{
-  font-size:8px;font-weight:700;letter-spacing:.14em;
-  text-transform:uppercase;color:#1e2130;
-  margin-top:2px;
-}}
-.fias{{
-  font-size:9px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.1em;
-  color:#1e2130;text-align:right;line-height:1.9;
-}}
+.rv{{font-family:\'Barlow Condensed\',sans-serif;font-size:120px;font-weight:900;line-height:1;letter-spacing:-.01em;}}
+.rv.n{{color:#ffffff;}}.rv.g{{color:#2ecc71;}}.rv.r{{color:#c0392b;}}.rv.y{{color:#f1c40f;}}
+.rl{{font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#6870a0;}}
+.pbar{{height:115px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;padding:0 52px;gap:14px;border-bottom:2px solid #0f1020;}}
+.pbar-row{{display:flex;justify-content:space-between;align-items:baseline;}}
+.pbar-wins{{font-family:\'Barlow Condensed\',sans-serif;font-size:26px;font-weight:700;color:#2ecc71;letter-spacing:.06em;}}
+.pbar-src{{font-family:\'Barlow\',sans-serif;font-size:18px;font-weight:500;color:#3a3d54;letter-spacing:.1em;}}
+.pbar-track{{height:6px;background:#0f1020;border-radius:3px;overflow:hidden;}}
+.pbar-fill{{height:100%;background:#2ecc71;border-radius:3px;width:{_winrate}%;}}
+.streak{{height:134px;flex-shrink:0;background:#040d07;border-bottom:2px solid #091509;display:flex;align-items:center;padding:0 52px;gap:18px;}}
+.streak-empty{{height:134px;flex-shrink:0;border-bottom:2px solid #0f1020;}}
+.s-dots{{display:flex;gap:8px;align-items:center;}}
+.s-dot{{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex-shrink:0;}}
+.s-txt{{font-family:\'Barlow Condensed\',sans-serif;font-size:48px;font-weight:900;letter-spacing:.1em;color:#2ecc71;line-height:1;}}
+.extra{{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;background:#0a0b14;flex:1;}}
+.ec{{background:#06070d;display:flex;flex-direction:column;justify-content:center;padding:0 52px;gap:10px;}}
+.ev{{font-family:\'Barlow Condensed\',sans-serif;font-size:92px;font-weight:900;line-height:1;letter-spacing:-.01em;}}
+.ev.r{{color:#c0392b;}}.ev.g{{color:#2ecc71;}}.ev.w{{color:#ffffff;}}.ev.y{{color:#f1c40f;}}
+.el{{font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#6870a0;}}
+.footer{{height:230px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;}}
+.footer-left{{display:flex;align-items:center;gap:24px;}}
+.logo-img{{width:96px;height:96px;border-radius:50%;object-fit:cover;flex-shrink:0;}}
+.logo-ph{{width:96px;height:96px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;letter-spacing:.04em;}}
+.brand{{font-family:\'Barlow Condensed\',sans-serif;font-size:52px;font-weight:900;letter-spacing:.22em;color:#c0392b;line-height:1;}}
+.brand-sub{{font-family:\'Barlow\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#3a3d54;margin-top:5px;}}
+.fias{{font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#3a3d54;text-align:right;line-height:2;}}
 </style>
 </head>
 <body>
 <div class="card">
-
-  <!-- ═══ HERO ═══ -->
-  <div class="hero">
-    <div class="photo-col">
-      <div class="photo-icon">
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0 0"/>
-          <path d="M9 3L7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
-        </svg>
-      </div>
-      <div class="photo-lbl">Место<br>для фото</div>
+  <div class="photo-col">
+    <div class="photo-icon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4zm0 0"/><path d="M9 3L7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
     </div>
-    <div class="name-col">
+    <div class="photo-lbl">Место<br>для<br>фото</div>
+  </div>
+  <div class="info-col">
+    <div class="name-block">
+      <div class="f-disc">{_main_cat}</div>
       <div class="f-first">{first_n}</div>
       <div class="f-last">{_last_n_main}<span class="red">{_last_n_end}</span></div>
-      <div class="f-cat">{_main_cat}</div>
       <div class="f-meta">
         <span class="f-flag">{flag_emoji}</span>
         <span class="f-cname">{country_name}</span>
         <span class="f-age">{age_str}</span>
       </div>
     </div>
-  </div>
-
-  <!-- ═══ РЕКОРД ═══ -->
-  <div class="record">
-    <div class="rec"><div class="rv n">{_total}</div><div class="rl">{_fight_word}</div></div>
-    <div class="rec"><div class="rv g">{_wins}</div><div class="rl">Победы</div></div>
-    <div class="rec"><div class="rv r">{_losses}</div><div class="rl">Пораж.</div></div>
-    <div class="rec"><div class="rv y">{_winrate}%</div><div class="rl">% побед</div></div>
-  </div>
-
-  <!-- ═══ WIN BAR ═══ -->
-  <div class="pbar">
-    <div class="pbar-row">
-      <span class="pbar-wins">{_wins} побед</span>
-      <span class="pbar-src">FIAS · 2021–2026</span>
+    <div class="record">
+      <div class="rec"><div class="rv n">{_total}</div><div class="rl">{_fight_word}</div></div>
+      <div class="rec"><div class="rv g">{_wins}</div><div class="rl">Победы</div></div>
+      <div class="rec"><div class="rv r">{_losses}</div><div class="rl">Пораж.</div></div>
+      <div class="rec"><div class="rv y">{_winrate}%</div><div class="rl">% побед</div></div>
     </div>
-    <div class="pbar-track"><div class="pbar-fill"></div></div>
-  </div>
-
-  <!-- ═══ STREAK (если есть) ═══ -->
-  {_streak_block}
-
-  <!-- ═══ 4 ЯЧЕЙКИ ═══ -->
-  <div class="extra">
-    <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
-    <div class="ec"><div class="ev g">{_finals_c}</div><div class="el">Финалы в карьере</div></div>
-    <div class="ec"><div class="ev w">{avg_score}</div><div class="el">Ср. балл / бой</div></div>
-    <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
-  </div>
-
-  <!-- ═══ ФУТЕР ═══ -->
-  <div class="footer">
-    <div class="footer-left">
-      {_logo_html}
-      <div>
-        <div class="brand">FIGHTGURU</div>
-        <div class="brand-sub">Sambo Stats Portal</div>
+    <div class="pbar">
+      <div class="pbar-row">
+        <span class="pbar-wins">{_wins} побед из {_total}</span>
+        <span class="pbar-src">FIAS · 2021–2026</span>
       </div>
+      <div class="pbar-track"><div class="pbar-fill"></div></div>
     </div>
-    <div class="fias">Официальная<br>статистика FIAS</div>
+    {_streak_block}
+    <div class="extra">
+      <div class="ec"><div class="ev r">{fastest}</div><div class="el">Быстрейшая победа</div></div>
+      <div class="ec"><div class="ev g">{_finals_c}</div><div class="el">Финалы в карьере</div></div>
+      <div class="ec"><div class="ev w">{avg_score}</div><div class="el">Ср. балл / бой</div></div>
+      <div class="ec"><div class="ev y">{last_title_year}</div><div class="el">Последний финал</div></div>
+    </div>
+    <div class="footer">
+      <div class="footer-left">
+        {_logo_html}
+        <div>
+          <div class="brand">FIGHTGURU</div>
+          <div class="brand-sub">Sambo Stats Portal</div>
+        </div>
+      </div>
+      <div class="fias">Официальная<br>статистика FIAS</div>
+    </div>
   </div>
-
 </div>
 </body>
 </html>"""
 
-    # ── Скачивание ────────────────────────────────────────────────────────────
+        # ── Скачивание ────────────────────────────────────────────────────────────
     st.download_button(
         label="⬇️ Скачать карточку HTML",
         data=html_page.encode('utf-8'),
