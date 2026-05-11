@@ -1417,13 +1417,13 @@ with tab_s:
         f'</div>'
     ) if _streak_n >= 2 else '<div class="streak-empty"></div>'
 
-    # ── HTML карточка 1080x1920 (левая треть фото, правые две трети инфо)
+    # ── HTML карточка 1080x1920 — Bebas Neue + Barlow
     html_page = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1080">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;700;800&display=swap" rel="stylesheet">
 <title>{final_name} - FightGuru</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -1433,26 +1433,26 @@ html,body{{background:#06070d;margin:0;padding:0;width:1080px}}
 .photo-col::before{{content:\'\';position:absolute;left:0;top:0;width:10px;height:100%;background:#c0392b;}}
 .photo-icon{{width:120px;height:120px;border-radius:50%;border:3px dashed #1a1d2e;display:flex;align-items:center;justify-content:center;opacity:.18;}}
 .photo-icon svg{{width:56px;height:56px;fill:#444;}}
-.photo-lbl{{font-family:\'Barlow Condensed\',sans-serif;font-size:18px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#1a1d2e;text-align:center;line-height:1.9;}}
+.photo-lbl{{font-family:\'Bebas Neue\',sans-serif;font-size:20px;letter-spacing:.26em;color:#1a1d2e;text-align:center;line-height:2;}}
 .info-col{{width:720px;height:1920px;display:flex;flex-direction:column;}}
 .name-block{{height:652px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:0 52px 44px 52px;border-bottom:4px solid #c0392b;}}
-.f-disc{{font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.24em;color:#c0392b;margin-bottom:20px;line-height:1;}}
-.f-first{{font-family:\'Barlow\',sans-serif;font-size:38px;font-weight:800;text-transform:uppercase;letter-spacing:.2em;color:#ffffff;line-height:1;margin-bottom:8px;}}
-.f-last{{font-family:\'Barlow Condensed\',sans-serif;font-size:148px;font-weight:900;text-transform:uppercase;color:#ffffff;line-height:.88;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:clip;margin-bottom:34px;}}
+.f-disc{{font-family:\'Bebas Neue\',sans-serif;font-size:32px;letter-spacing:.28em;color:#c0392b;margin-bottom:20px;line-height:1;}}
+.f-first{{font-family:\'Barlow\',sans-serif;font-size:38px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:#ffffff;line-height:1;margin-bottom:6px;}}
+.f-last{{font-family:\'Bebas Neue\',sans-serif;font-size:148px;color:#ffffff;line-height:.9;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:clip;margin-bottom:34px;}}
 .f-last .red{{color:#c0392b;}}
 .f-meta{{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}}
 .f-flag{{font-size:44px;line-height:1;flex-shrink:0;}}
 .f-cname{{font-family:\'Barlow\',sans-serif;font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#8890b8;}}
-.f-age{{font-family:\'Barlow Condensed\',sans-serif;font-size:32px;font-weight:700;color:#c0392b;letter-spacing:.06em;}}
+.f-age{{font-family:\'Bebas Neue\',sans-serif;font-size:34px;color:#c0392b;letter-spacing:.08em;}}
 .record{{height:364px;flex-shrink:0;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid #0f1020;}}
 .rec{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border-right:2px solid #0f1020;}}
 .rec:last-child{{border-right:none;}}
-.rv{{font-family:\'Barlow Condensed\',sans-serif;font-size:120px;font-weight:900;line-height:1;letter-spacing:-.01em;}}
+.rv{{font-family:\'Bebas Neue\',sans-serif;font-size:120px;line-height:1;letter-spacing:.02em;}}
 .rv.n{{color:#ffffff;}}.rv.g{{color:#2ecc71;}}.rv.r{{color:#c0392b;}}.rv.y{{color:#f1c40f;}}
-.rl{{font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#6870a0;}}
+.rl{{font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:.22em;color:#6870a0;}}
 .pbar{{height:115px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;padding:0 52px;gap:14px;border-bottom:2px solid #0f1020;}}
 .pbar-row{{display:flex;justify-content:space-between;align-items:baseline;}}
-.pbar-wins{{font-family:\'Barlow Condensed\',sans-serif;font-size:26px;font-weight:700;color:#2ecc71;letter-spacing:.06em;}}
+.pbar-wins{{font-family:\'Bebas Neue\',sans-serif;font-size:28px;letter-spacing:.1em;color:#2ecc71;}}
 .pbar-src{{font-family:\'Barlow\',sans-serif;font-size:18px;font-weight:500;color:#3a3d54;letter-spacing:.1em;}}
 .pbar-track{{height:6px;background:#0f1020;border-radius:3px;overflow:hidden;}}
 .pbar-fill{{height:100%;background:#2ecc71;border-radius:3px;width:{_winrate}%;}}
@@ -1460,19 +1460,19 @@ html,body{{background:#06070d;margin:0;padding:0;width:1080px}}
 .streak-empty{{height:134px;flex-shrink:0;border-bottom:2px solid #0f1020;}}
 .s-dots{{display:flex;gap:8px;align-items:center;}}
 .s-dot{{width:14px;height:14px;border-radius:50%;background:#2ecc71;flex-shrink:0;}}
-.s-txt{{font-family:\'Barlow Condensed\',sans-serif;font-size:48px;font-weight:900;letter-spacing:.1em;color:#2ecc71;line-height:1;}}
+.s-txt{{font-family:\'Bebas Neue\',sans-serif;font-size:52px;letter-spacing:.12em;color:#2ecc71;line-height:1;}}
 .extra{{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;background:#0a0b14;flex:1;}}
 .ec{{background:#06070d;display:flex;flex-direction:column;justify-content:center;padding:0 52px;gap:10px;}}
-.ev{{font-family:\'Barlow Condensed\',sans-serif;font-size:92px;font-weight:900;line-height:1;letter-spacing:-.01em;}}
+.ev{{font-family:\'Bebas Neue\',sans-serif;font-size:92px;line-height:1;letter-spacing:.02em;}}
 .ev.r{{color:#c0392b;}}.ev.g{{color:#2ecc71;}}.ev.w{{color:#ffffff;}}.ev.y{{color:#f1c40f;}}
-.el{{font-family:\'Barlow Condensed\',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:#6870a0;}}
+.el{{font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:.22em;color:#6870a0;}}
 .footer{{height:230px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 52px;border-top:3px solid #0f1020;}}
 .footer-left{{display:flex;align-items:center;gap:24px;}}
 .logo-img{{width:96px;height:96px;border-radius:50%;object-fit:cover;flex-shrink:0;}}
-.logo-ph{{width:96px;height:96px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:\'Barlow Condensed\',sans-serif;font-size:28px;font-weight:900;color:#fff;letter-spacing:.04em;}}
-.brand{{font-family:\'Barlow Condensed\',sans-serif;font-size:52px;font-weight:900;letter-spacing:.22em;color:#c0392b;line-height:1;}}
+.logo-ph{{width:96px;height:96px;border-radius:50%;background:#c0392b;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:30px;color:#fff;letter-spacing:.06em;}}
+.brand{{font-family:\'Bebas Neue\',sans-serif;font-size:54px;letter-spacing:.24em;color:#c0392b;line-height:1;}}
 .brand-sub{{font-family:\'Barlow\',sans-serif;font-size:16px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#3a3d54;margin-top:5px;}}
-.fias{{font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#3a3d54;text-align:right;line-height:2;}}
+.fias{{font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:.16em;color:#3a3d54;text-align:right;line-height:2.2;}}
 </style>
 </head>
 <body>
